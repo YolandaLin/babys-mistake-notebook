@@ -397,7 +397,7 @@ async function loadItemsFromCloud() {
 
 function resetForm() {
   els.form.reset();
-  els.subjectInput.value = "數學";
+  els.subjectInput.value = "社會";
   els.difficultyInput.value = "2";
   currentImage = "";
   extractedQuestions = [];

@@ -69,13 +69,6 @@
               </div>
 
               <div class="legacy-fields" hidden>
-                <select id="subjectInput">
-                  <option value="數學">數學</option>
-                  <option value="國語">國語</option>
-                  <option value="英文">英文</option>
-                  <option value="自然">自然</option>
-                  <option value="社會" selected>社會</option>
-                </select>
                 <input id="topicInput" type="text" />
                 <select id="difficultyInput">
                   <option value="1">入門</option>
@@ -87,6 +80,15 @@
                 <input id="sourceInput" type="url" />
                 <textarea id="explanationInput"></textarea>
               </div>
+
+              <label>
+                科目
+                <select id="subjectInput">
+                  <option value="自然">自然</option>
+                  <option value="社會" selected>社會</option>
+                  <option value="國文">國文</option>
+                </select>
+              </label>
 
               <div class="form-actions">
                 <button class="secondary-button" id="aiSplitButton" type="button">AI辨識</button>
@@ -138,11 +140,9 @@
             <input id="librarySearch" type="search" placeholder="搜尋科目、單元或題目" />
             <select id="subjectFilter">
               <option value="">全部科目</option>
-              <option value="數學">數學</option>
-              <option value="國語">國語</option>
-              <option value="英文">英文</option>
               <option value="自然">自然</option>
               <option value="社會">社會</option>
+              <option value="國文">國文</option>
             </select>
           </div>
           <div class="mistake-list" id="mistakeList"></div>

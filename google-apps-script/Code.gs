@@ -75,7 +75,7 @@ function refineMistake(input) {
         topicHint: input.topic || '',
         rawOcrText: input.rawText || '',
         outputShape: {
-          subject: '數學/國語/英文/自然/社會',
+          subject: '自然/社會/國文',
           topic: '單元名稱',
           question: '整理後的完整題目',
           answer: '可判斷才填',
@@ -169,7 +169,7 @@ function analyzePage(input) {
           questions: [
             {
               questionNumber: '題號，例如 24',
-              subject: '數學/國語/英文/自然/社會',
+              subject: '自然/社會/國文',
               topic: '單元名稱',
               question: '整理後完整題目，含選項',
               answer: '可判斷才填，否則空字串',
