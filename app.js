@@ -1,4 +1,5 @@
 const STORAGE_KEY = "mistake-practice-items-v1";
+const AI_ENDPOINT_KEY = "mistake-practice-ai-endpoint-v1";
 
 const views = {
   capture: document.querySelector("#captureView"),
@@ -32,6 +33,9 @@ const els = {
   captureStatus: document.querySelector("#captureStatus"),
   ocrButton: document.querySelector("#ocrButton"),
   searchButton: document.querySelector("#searchButton"),
+  aiCleanButton: document.querySelector("#aiCleanButton"),
+  aiEndpointInput: document.querySelector("#aiEndpointInput"),
+  saveEndpointButton: document.querySelector("#saveEndpointButton"),
   librarySearch: document.querySelector("#librarySearch"),
   subjectFilter: document.querySelector("#subjectFilter"),
   mistakeList: document.querySelector("#mistakeList"),
@@ -51,6 +55,7 @@ const els = {
 let items = loadItems();
 let currentImage = "";
 let practiceItemId = "";
+els.aiEndpointInput.value = localStorage.getItem(AI_ENDPOINT_KEY) || "";
 
 function makeId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -96,6 +101,10 @@ function setStatus(message) {
   els.captureStatus.textContent = message;
 }
 
+function getAiEndpoint() {
+  return els.aiEndpointInput.value.trim() || localStorage.getItem(AI_ENDPOINT_KEY) || "";
+}
+
 function switchView(viewName) {
   Object.entries(views).forEach(([name, view]) => {
     view.classList.toggle("active", name === viewName);
@@ -118,6 +127,16 @@ function buildSearchQuery() {
     "詳解",
   ].filter(Boolean);
   return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function dataUrlToInlineImage(dataUrl) {
+  if (!dataUrl) return null;
+  const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
+  if (!match) return null;
+  return {
+    mimeType: match[1],
+    data: match[2],
+  };
 }
 
 function openExplanationSearch(question, subject = "") {
@@ -161,6 +180,66 @@ function resetForm() {
       <circle cx="184" cy="58" r="18" fill="#f59e0b" />
     </svg>
   `;
+}
+
+function applyAiResult(result) {
+  if (result.subject) els.subjectInput.value = result.subject;
+  if (result.topic) els.topicInput.value = result.topic;
+  if (result.question) els.questionInput.value = result.question;
+  if (result.answer) els.answerInput.value = result.answer;
+  if (result.explanation) els.explanationInput.value = result.explanation;
+  if (result.sourceUrl) els.sourceInput.value = result.sourceUrl;
+  if (result.difficulty) els.difficultyInput.value = String(result.difficulty);
+}
+
+async function refineWithAi() {
+  const endpoint = getAiEndpoint();
+  if (!endpoint) {
+    setStatus("請先在 AI 後端設定貼上 Apps Script Web App endpoint。");
+    return;
+  }
+
+  const rawText = els.questionInput.value.trim();
+  if (!rawText && !currentImage) {
+    setStatus("請先拍照，或貼上 OCR 粗文字。");
+    return;
+  }
+
+  setStatus("AI 正在重建題目與判斷欄位。");
+  els.aiCleanButton.disabled = true;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "refineMistake",
+        subject: els.subjectInput.value,
+        topic: els.topicInput.value.trim(),
+        rawText,
+        image: dataUrlToInlineImage(currentImage),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI endpoint returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(result.error || "AI 整理失敗");
+    }
+
+    applyAiResult(result.data || {});
+    setStatus("AI 已整理完成，請再看一次內容後存入錯題庫。");
+  } catch (error) {
+    setStatus(`AI 整理失敗：${error.message}`);
+  } finally {
+    els.aiCleanButton.disabled = false;
+  }
 }
 
 function renderImagePreview(dataUrl) {
@@ -465,6 +544,11 @@ els.searchButton.addEventListener("click", () => {
 });
 
 els.ocrButton.addEventListener("click", tryRecognizeText);
+els.aiCleanButton.addEventListener("click", refineWithAi);
+els.saveEndpointButton.addEventListener("click", () => {
+  localStorage.setItem(AI_ENDPOINT_KEY, els.aiEndpointInput.value.trim());
+  setStatus("AI endpoint 已儲存。");
+});
 els.librarySearch.addEventListener("input", renderLibrary);
 els.subjectFilter.addEventListener("change", renderLibrary);
 els.correctButton.addEventListener("click", () => updatePracticeResult(true));

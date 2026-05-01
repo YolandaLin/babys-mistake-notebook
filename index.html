@@ -106,9 +106,18 @@
 
               <div class="form-actions">
                 <button class="secondary-button" id="ocrButton" type="button">辨識照片文字</button>
+                <button class="secondary-button" id="aiCleanButton" type="button">AI整理題目</button>
                 <button class="secondary-button" id="searchButton" type="button">上網找詳解</button>
                 <button class="primary-button" type="submit">存入錯題庫</button>
               </div>
+              <details class="config-panel">
+                <summary>AI 後端設定</summary>
+                <label>
+                  AI endpoint
+                  <input id="aiEndpointInput" type="url" placeholder="https://script.google.com/macros/s/.../exec" />
+                </label>
+                <button class="secondary-button small" id="saveEndpointButton" type="button">儲存 endpoint</button>
+              </details>
               <p class="status-line" id="captureStatus" role="status"></p>
             </form>
 

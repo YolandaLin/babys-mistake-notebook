@@ -363,6 +363,27 @@ button:focus-visible {
   font-size: 13px;
 }
 
+.config-panel {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.config-panel summary {
+  cursor: pointer;
+  color: #334155;
+  font-weight: 700;
+}
+
+.config-panel label {
+  margin-top: 12px;
+}
+
+.config-panel button {
+  margin-top: 10px;
+}
+
 .preview-panel {
   display: grid;
   align-content: start;
