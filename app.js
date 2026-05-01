@@ -249,7 +249,7 @@ function openExplanationSearch(question, subject = "") {
 function createItemFromExtracted(question) {
   const now = new Date().toISOString();
   return {
-    id: makeId(),
+    id: question.savedItemId || makeId(),
     studentName: getStudentName(),
     subject: question.subject || els.subjectInput.value,
     topic: question.topic || els.topicInput.value.trim() || "未分類",
@@ -376,6 +376,7 @@ function renderSplitResults() {
     const card = document.createElement("article");
     const needsRetake = Boolean(question.needsRetake);
     const needsReview = Boolean(question.needsHumanReview);
+    const isCollapsed = Boolean(question.saved && question.collapsed !== false);
     card.className = `split-card ${needsRetake ? "retake" : needsReview ? "review" : ""}`;
     card.dataset.index = String(index);
 
@@ -392,7 +393,7 @@ function renderSplitResults() {
           ? `<p class="split-warning">${escapeHtml(question.reason || "這題需要人工確認")}</p>`
           : ""
       }
-      <div class="result-summary">
+      <div class="result-summary" ${isCollapsed ? "" : "hidden"}>
         <div>
           <strong>題目：</strong>
           <span>${escapeHtml(question.question || "未辨識出題目文字")}</span>
@@ -406,7 +407,7 @@ function renderSplitResults() {
           <span>${escapeHtml(question.explanation || "尚未產生詳解")}</span>
         </div>
       </div>
-      <div class="review-fields" aria-label="編輯辨識結果" hidden>
+      <div class="review-fields" aria-label="編輯辨識結果" ${isCollapsed ? "hidden" : ""}>
         <label>
           題目
           <textarea class="review-question" rows="6">${escapeHtml(question.question || "")}</textarea>
@@ -421,54 +422,27 @@ function renderSplitResults() {
         </label>
       </div>
       <div class="card-actions">
-        <button class="secondary-button small edit-split" type="button">編輯</button>
-        <button class="primary-button small save-split" type="button">儲存這題</button>
+        ${isCollapsed ? `<button class="secondary-button small expand-split" type="button">展開</button>` : ""}
         <button class="danger-button small remove-split" type="button">刪除</button>
       </div>
     `;
 
-    card.querySelector(".edit-split").addEventListener("click", (event) => {
-      const summary = card.querySelector(".result-summary");
-      const fields = card.querySelector(".review-fields");
-      const isEditing = event.currentTarget.textContent === "完成";
-      if (isEditing) {
-        updateReviewedQuestion(index);
-        renderSplitResults();
-        setStatus(`第 ${question.questionNumber || index + 1} 題已更新，請確認後儲存。`);
-        return;
-      }
-      summary.hidden = true;
-      fields.hidden = false;
-      event.currentTarget.textContent = "完成";
-    });
-    card.querySelector(".save-split").addEventListener("click", () => {
-      const reviewedQuestion = readReviewedQuestion(index);
-      extractedQuestions[index] = reviewedQuestion;
-      if (reviewedQuestion.saved) {
-        setStatus(`第 ${reviewedQuestion.questionNumber || index + 1} 題已經儲存過。`);
-        return;
-      }
-      if (!reviewedQuestion.question) {
-        setStatus("這題沒有可用題目文字，不能存入。");
-        return;
-      }
-      if (!requireStudent()) return;
-      items.unshift(createItemFromExtracted(reviewedQuestion));
-      const item = items[0];
-      saveItems();
-      renderAll();
-      extractedQuestions[index] = { ...reviewedQuestion, saved: true };
-      card.querySelector(".save-split").disabled = true;
-      saveItemToCloud(item)
-        .then((saved) => {
-          setStatus(saved ? `第 ${reviewedQuestion.questionNumber || index + 1} 題已存入本機與雲端。` : `第 ${reviewedQuestion.questionNumber || index + 1} 題已存入本機。`);
-        })
-        .catch((error) => setStatus(`已存本機，但雲端失敗：${error.message}`));
+    card.querySelector(".expand-split")?.addEventListener("click", () => {
+      extractedQuestions[index] = { ...question, collapsed: false, saved: false };
+      renderSplitResults();
+      setStatus(`第 ${question.questionNumber || index + 1} 題已展開，可修改後再按儲存JSON。`);
     });
     card.querySelector(".remove-split").addEventListener("click", () => removeExtractedQuestion(index));
 
     els.splitResults.append(card);
   });
+}
+
+function upsertLocalItems(newItems) {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  newItems.forEach((item) => byId.set(item.id, item));
+  const newIds = new Set(newItems.map((item) => item.id));
+  items = [...newItems, ...items.filter((item) => !newIds.has(item.id))];
 }
 
 async function saveRecognizedQuestions() {
@@ -488,15 +462,18 @@ async function saveRecognizedQuestions() {
   }
 
   const newItems = reviewedQuestions.map((entry) => createItemFromExtracted(entry.question));
-  items = [...newItems, ...items];
+  upsertLocalItems(newItems);
   saveItems();
   renderAll();
-  reviewedQuestions.forEach((entry) => {
-    extractedQuestions[entry.index] = { ...entry.question, saved: true };
-    const card = els.splitResults.querySelector(`[data-index="${entry.index}"]`);
-    const button = card?.querySelector(".save-split");
-    if (button) button.disabled = true;
+  reviewedQuestions.forEach((entry, itemIndex) => {
+    extractedQuestions[entry.index] = {
+      ...entry.question,
+      saved: true,
+      collapsed: true,
+      savedItemId: newItems[itemIndex].id,
+    };
   });
+  renderSplitResults();
 
   let cloudCount = 0;
   for (const item of newItems) {
