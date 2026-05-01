@@ -273,7 +273,7 @@ function createItemFromExtracted(question) {
     answer: question.answer || "",
     sourceUrl: question.sourceUrl || "",
     explanation: question.explanation || "",
-    image: currentImage,
+    image: "",
     createdAt: now,
     nextReview: now,
     interval: 1,
@@ -288,7 +288,7 @@ function toCloudItem(item) {
   return {
     ...item,
     image: "",
-    hasLocalImage: Boolean(item.image),
+    hasLocalImage: false,
   };
 }
 
@@ -577,8 +577,9 @@ async function splitPageWithAi() {
     }
 
     extractedQuestions = Array.isArray(result.data?.questions) ? result.data.questions : [];
+    currentImage = "";
     renderSplitResults();
-    setStatus(`AI 已切出 ${extractedQuestions.length} 題，尚未存入 Google Sheet；確認後請按儲存JSON。`);
+    setStatus(`AI 已切出 ${extractedQuestions.length} 題，照片已清除；確認後請按儲存JSON。`);
   } catch (error) {
     setStatus(`AI 切題失敗：${error.message}`);
   } finally {
