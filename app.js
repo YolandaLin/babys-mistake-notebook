@@ -226,6 +226,21 @@ function updateReviewedQuestion(index) {
 function removeExtractedQuestion(index) {
   const removed = extractedQuestions[index];
   extractedQuestions.splice(index, 1);
+  if (removed?.savedItemId) {
+    const localItem = items.find((item) => item.id === removed.savedItemId);
+    items = items.filter((item) => item.id !== removed.savedItemId);
+    saveItems();
+    renderAll();
+    renderSplitResults();
+    if (localItem) {
+      deleteItemFromCloud(localItem)
+        .then((deleted) => {
+          if (deleted) setStatus(`已從畫面、本機與 Google Sheet 刪除第 ${removed?.questionNumber || index + 1} 題。`);
+        })
+        .catch((error) => setStatus(`已刪本機，但 Google Sheet 刪除失敗：${error.message}`));
+      return;
+    }
+  }
   renderSplitResults();
   setStatus(`已從畫面移除第 ${removed?.questionNumber || index + 1} 題，不會存入 JSON。`);
 }
@@ -306,6 +321,35 @@ async function saveItemToCloud(item) {
   const result = await response.json();
   if (!result.ok) {
     throw new Error(result.error || "雲端儲存失敗");
+  }
+  return true;
+}
+
+async function deleteItemFromCloud(item) {
+  const endpoint = getAiEndpoint();
+  const studentName = item.studentName || getStudentName();
+  if (!endpoint || !studentName || !item.id) return false;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    redirect: "follow",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      action: "deleteMistake",
+      studentName,
+      id: item.id,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cloud endpoint returned ${response.status}`);
+  }
+
+  const result = await response.json();
+  if (!result.ok) {
+    throw new Error(result.error || "雲端刪除失敗");
   }
   return true;
 }
@@ -597,6 +641,11 @@ function renderLibrary() {
       items = items.filter((entry) => entry.id !== item.id);
       saveItems();
       renderAll();
+      deleteItemFromCloud(item)
+        .then((deleted) => {
+          if (deleted) setStatus("已從本機與 Google Sheet 刪除錯題。");
+        })
+        .catch((error) => setStatus(`已刪本機，但 Google Sheet 刪除失敗：${error.message}`));
     });
 
     els.mistakeList.append(node);

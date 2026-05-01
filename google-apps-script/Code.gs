@@ -46,6 +46,8 @@ function doPost(e) {
       data = saveMistake(input);
     } else if (input.action === 'listMistakes') {
       data = listMistakes(input);
+    } else if (input.action === 'deleteMistake') {
+      data = deleteMistake(input);
     } else {
       throw new Error('Unknown action');
     }
@@ -280,7 +282,7 @@ function saveMistake(input) {
   const sheet = getMistakeSheet();
   const now = new Date().toISOString();
   const id = item.id || Utilities.getUuid();
-  sheet.appendRow([
+  const rowValues = [
     studentName,
     id,
     item.subject || '',
@@ -299,8 +301,33 @@ function saveMistake(input) {
     item.mastered ? 'TRUE' : 'FALSE',
     JSON.stringify(item),
     now,
-  ]);
-  return { id };
+  ];
+  const rowIndex = findMistakeRow(sheet, studentName, id);
+  if (rowIndex) {
+    sheet.getRange(rowIndex, 1, 1, rowValues.length).setValues([rowValues]);
+    return { id, mode: 'updated' };
+  }
+
+  sheet.appendRow(rowValues);
+  return { id, mode: 'created' };
+}
+
+function deleteMistake(input) {
+  const studentName = normalizeStudentName(input.studentName);
+  const id = String(input.id || '').trim();
+  if (!studentName) throw new Error('Missing studentName');
+  if (!id) throw new Error('Missing id');
+
+  const sheet = getMistakeSheet();
+  const values = sheet.getDataRange().getValues();
+  let deleted = 0;
+  for (let index = values.length - 1; index >= 1; index -= 1) {
+    if (String(values[index][0]) === studentName && String(values[index][1]) === id) {
+      sheet.deleteRow(index + 1);
+      deleted += 1;
+    }
+  }
+  return { id, deleted };
 }
 
 function listMistakes(input) {
@@ -385,6 +412,16 @@ function getMistakeSheet() {
   }
 
   return sheet;
+}
+
+function findMistakeRow(sheet, studentName, id) {
+  const values = sheet.getDataRange().getValues();
+  for (let index = 1; index < values.length; index += 1) {
+    if (String(values[index][0]) === studentName && String(values[index][1]) === id) {
+      return index + 1;
+    }
+  }
+  return 0;
 }
 
 function normalizeStudentName(value) {
