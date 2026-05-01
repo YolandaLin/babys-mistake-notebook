@@ -34,10 +34,8 @@ const els = {
   sourceInput: document.querySelector("#sourceInput"),
   explanationInput: document.querySelector("#explanationInput"),
   captureStatus: document.querySelector("#captureStatus"),
-  ocrButton: document.querySelector("#ocrButton"),
-  searchButton: document.querySelector("#searchButton"),
   aiSplitButton: document.querySelector("#aiSplitButton"),
-  aiCleanButton: document.querySelector("#aiCleanButton"),
+  saveRecognizedButton: document.querySelector("#saveRecognizedButton"),
   aiEndpointInput: document.querySelector("#aiEndpointInput"),
   saveEndpointButton: document.querySelector("#saveEndpointButton"),
   splitSummary: document.querySelector("#splitSummary"),
@@ -160,14 +158,22 @@ function switchView(viewName) {
   if (viewName === "dashboard") renderDashboard();
 }
 
-function buildSearchQuery() {
-  const parts = [
-    els.subjectInput.value,
-    els.topicInput.value,
-    els.questionInput.value,
-    "詳解",
-  ].filter(Boolean);
-  return parts.join(" ").replace(/\s+/g, " ").trim();
+function readReviewedQuestion(index) {
+  const card = els.splitResults.querySelector(`[data-index="${index}"]`);
+  if (!card) return extractedQuestions[index];
+
+  return {
+    ...extractedQuestions[index],
+    subject: card.querySelector(".review-subject")?.value.trim() || extractedQuestions[index].subject || "",
+    topic: card.querySelector(".review-topic")?.value.trim() || extractedQuestions[index].topic || "",
+    question: card.querySelector(".review-question").value.trim(),
+    answer: card.querySelector(".review-answer").value.trim(),
+    explanation: card.querySelector(".review-explanation").value.trim(),
+  };
+}
+
+function updateReviewedQuestion(index) {
+  extractedQuestions[index] = readReviewedQuestion(index);
 }
 
 function dataUrlToInlineImage(dataUrl) {
@@ -184,29 +190,6 @@ function openExplanationSearch(question, subject = "") {
   const query = [subject, question, "詳解"].filter(Boolean).join(" ");
   const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   window.open(url, "_blank", "noopener,noreferrer");
-}
-
-function createItemFromForm() {
-  const now = new Date().toISOString();
-  return {
-    id: makeId(),
-    studentName: getStudentName(),
-    subject: els.subjectInput.value,
-    topic: els.topicInput.value.trim(),
-    difficulty: Number(els.difficultyInput.value),
-    question: els.questionInput.value.trim(),
-    answer: els.answerInput.value.trim(),
-    sourceUrl: els.sourceInput.value.trim(),
-    explanation: els.explanationInput.value.trim(),
-    image: currentImage,
-    createdAt: now,
-    nextReview: now,
-    interval: 1,
-    attempts: 0,
-    correct: 0,
-    wrong: 0,
-    mastered: false,
-  };
 }
 
 function createItemFromExtracted(question) {
@@ -328,27 +311,6 @@ function resetForm() {
   `;
 }
 
-function applyAiResult(result) {
-  if (result.subject) els.subjectInput.value = result.subject;
-  if (result.topic) els.topicInput.value = result.topic;
-  if (result.question) els.questionInput.value = result.question;
-  if (result.answer) els.answerInput.value = result.answer;
-  if (result.explanation) els.explanationInput.value = result.explanation;
-  if (result.sourceUrl) els.sourceInput.value = result.sourceUrl;
-  if (result.difficulty) els.difficultyInput.value = String(result.difficulty);
-}
-
-function applyExtractedQuestion(question) {
-  if (question.subject) els.subjectInput.value = question.subject;
-  if (question.topic) els.topicInput.value = question.topic;
-  if (question.question) els.questionInput.value = question.question;
-  if (question.answer) els.answerInput.value = question.answer;
-  if (question.explanation) els.explanationInput.value = question.explanation;
-  if (question.sourceUrl) els.sourceInput.value = question.sourceUrl;
-  if (question.difficulty) els.difficultyInput.value = String(question.difficulty);
-  setStatus(`已套用第 ${question.questionNumber || ""} 題，請確認後存入錯題庫。`);
-}
-
 function renderSplitResults() {
   els.splitResults.innerHTML = "";
   els.splitSummary.textContent = extractedQuestions.length ? `${extractedQuestions.length} 題` : "尚未切題";
@@ -358,6 +320,7 @@ function renderSplitResults() {
     const needsRetake = Boolean(question.needsRetake);
     const needsReview = Boolean(question.needsHumanReview);
     card.className = `split-card ${needsRetake ? "retake" : needsReview ? "review" : ""}`;
+    card.dataset.index = String(index);
 
     const confidence = Math.round(Number(question.confidence || 0) * 100);
     card.innerHTML = `
@@ -373,32 +336,108 @@ function renderSplitResults() {
           ? `<p class="split-warning">${escapeHtml(question.reason || "這題需要人工確認")}</p>`
           : ""
       }
+      <div class="review-fields" aria-label="辨識結果">
+        <label>
+          題目
+          <textarea class="review-question" rows="6" disabled>${escapeHtml(question.question || "")}</textarea>
+        </label>
+        <label>
+          答案
+          <textarea class="review-answer" rows="3" disabled>${escapeHtml(question.answer || "")}</textarea>
+        </label>
+        <label>
+          詳解
+          <textarea class="review-explanation" rows="4" disabled>${escapeHtml(question.explanation || "")}</textarea>
+        </label>
+      </div>
       <div class="card-actions">
-        <button class="secondary-button small use-split" type="button">套用到表單</button>
-        <button class="primary-button small save-split" type="button">直接存題</button>
+        <button class="secondary-button small edit-split" type="button">編輯</button>
+        <button class="primary-button small save-split" type="button">儲存這題</button>
       </div>
     `;
 
-    card.querySelector(".use-split").addEventListener("click", () => applyExtractedQuestion(question));
+    card.querySelector(".edit-split").addEventListener("click", (event) => {
+      const fields = [...card.querySelectorAll(".review-fields input, .review-fields textarea")];
+      const isEditing = event.currentTarget.textContent === "完成";
+      if (isEditing) {
+        updateReviewedQuestion(index);
+      }
+      fields.forEach((field) => {
+        field.disabled = isEditing;
+      });
+      event.currentTarget.textContent = isEditing ? "編輯" : "完成";
+    });
     card.querySelector(".save-split").addEventListener("click", () => {
-      if (!question.question) {
+      const reviewedQuestion = readReviewedQuestion(index);
+      extractedQuestions[index] = reviewedQuestion;
+      if (reviewedQuestion.saved) {
+        setStatus(`第 ${reviewedQuestion.questionNumber || index + 1} 題已經儲存過。`);
+        return;
+      }
+      if (!reviewedQuestion.question) {
         setStatus("這題沒有可用題目文字，不能存入。");
         return;
       }
       if (!requireStudent()) return;
-      items.unshift(createItemFromExtracted(question));
+      items.unshift(createItemFromExtracted(reviewedQuestion));
       const item = items[0];
       saveItems();
       renderAll();
+      extractedQuestions[index] = { ...reviewedQuestion, saved: true };
+      card.querySelector(".save-split").disabled = true;
       saveItemToCloud(item)
         .then((saved) => {
-          setStatus(saved ? `第 ${question.questionNumber || index + 1} 題已存入本機與雲端。` : `第 ${question.questionNumber || index + 1} 題已存入本機。`);
+          setStatus(saved ? `第 ${reviewedQuestion.questionNumber || index + 1} 題已存入本機與雲端。` : `第 ${reviewedQuestion.questionNumber || index + 1} 題已存入本機。`);
         })
         .catch((error) => setStatus(`已存本機，但雲端失敗：${error.message}`));
     });
 
     els.splitResults.append(card);
   });
+}
+
+async function saveRecognizedQuestions() {
+  if (!extractedQuestions.length) {
+    setStatus("請先按 AI辨識，確認題目後再儲存。");
+    return;
+  }
+  if (!requireStudent()) return;
+
+  const reviewedQuestions = extractedQuestions
+    .map((_, index) => ({ question: readReviewedQuestion(index), index }))
+    .filter((entry) => entry.question.question?.trim() && !entry.question.saved);
+
+  if (!reviewedQuestions.length) {
+    setStatus("沒有可儲存的題目文字。");
+    return;
+  }
+
+  const newItems = reviewedQuestions.map((entry) => createItemFromExtracted(entry.question));
+  items = [...newItems, ...items];
+  saveItems();
+  renderAll();
+  reviewedQuestions.forEach((entry) => {
+    extractedQuestions[entry.index] = { ...entry.question, saved: true };
+    const card = els.splitResults.querySelector(`[data-index="${entry.index}"]`);
+    const button = card?.querySelector(".save-split");
+    if (button) button.disabled = true;
+  });
+
+  let cloudCount = 0;
+  for (const item of newItems) {
+    try {
+      if (await saveItemToCloud(item)) cloudCount += 1;
+    } catch (error) {
+      setStatus(`已存本機，部分雲端同步失敗：${error.message}`);
+      return;
+    }
+  }
+
+  if (cloudCount) {
+    setStatus(`已儲存 ${newItems.length} 題 JSON，其中 ${cloudCount} 題已同步雲端。`);
+  } else {
+    setStatus(`已儲存 ${newItems.length} 題 JSON 到本機。`);
+  }
 }
 
 async function splitPageWithAi() {
@@ -442,61 +481,11 @@ async function splitPageWithAi() {
 
     extractedQuestions = Array.isArray(result.data?.questions) ? result.data.questions : [];
     renderSplitResults();
-    setStatus(`AI 已切出 ${extractedQuestions.length} 題，請確認後套用或存題。`);
+    setStatus(`AI 已切出 ${extractedQuestions.length} 題，請確認後編輯或儲存JSON。`);
   } catch (error) {
     setStatus(`AI 切題失敗：${error.message}`);
   } finally {
     els.aiSplitButton.disabled = false;
-  }
-}
-
-async function refineWithAi() {
-  const endpoint = getAiEndpoint();
-  if (!endpoint) {
-    setStatus("請先在 AI 後端設定貼上 Apps Script Web App endpoint。");
-    return;
-  }
-
-  const rawText = els.questionInput.value.trim();
-  if (!rawText && !currentImage) {
-    setStatus("請先拍照，或貼上 OCR 粗文字。");
-    return;
-  }
-
-  setStatus("AI 正在重建題目與判斷欄位。");
-  els.aiCleanButton.disabled = true;
-
-  try {
-    const response = await fetch(endpoint, {
-      method: "POST",
-      redirect: "follow",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify({
-        action: "refineMistake",
-        subject: els.subjectInput.value,
-        topic: els.topicInput.value.trim(),
-        rawText,
-        image: dataUrlToInlineImage(currentImage),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`AI endpoint returned ${response.status}`);
-    }
-
-    const result = await response.json();
-    if (!result.ok) {
-      throw new Error(result.error || "AI 整理失敗");
-    }
-
-    applyAiResult(result.data || {});
-    setStatus("AI 已整理完成，請再看一次內容後存入錯題庫。");
-  } catch (error) {
-    setStatus(`AI 整理失敗：${error.message}`);
-  } finally {
-    els.aiCleanButton.disabled = false;
   }
 }
 
@@ -726,42 +715,6 @@ function seedExamples() {
   renderAll();
 }
 
-async function tryRecognizeText() {
-  if (!currentImage) {
-    setStatus("請先拍照或選擇圖片。");
-    return;
-  }
-
-  setStatus("正在載入 OCR，若網路無法連線可直接手動輸入題目。");
-
-  try {
-    if (!window.Tesseract) {
-      await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
-    }
-    const result = await window.Tesseract.recognize(currentImage, "chi_tra+eng");
-    const text = result?.data?.text?.trim();
-    if (text) {
-      els.questionInput.value = text;
-      setStatus("已辨識文字，請確認題目內容。");
-    } else {
-      setStatus("沒有辨識到清楚文字，請手動輸入題目。");
-    }
-  } catch {
-    setStatus("OCR 載入失敗，請先手動輸入題目；正式版可改接後端 OCR。");
-  }
-}
-
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.onload = resolve;
-    script.onerror = reject;
-    document.head.append(script);
-  });
-}
-
 els.navTabs.forEach((button) => {
   button.addEventListener("click", () => switchView(button.dataset.view));
 });
@@ -776,42 +729,16 @@ els.photoInput.addEventListener("change", () => {
     extractedQuestions = [];
     renderImagePreview(currentImage);
     renderSplitResults();
-    setStatus("照片已加入，可辨識文字或直接存題。");
+    setStatus("照片已加入，請按 AI辨識。");
   });
   reader.readAsDataURL(file);
 });
 
 els.form.addEventListener("submit", (event) => {
   event.preventDefault();
-  if (!requireStudent()) return;
-  const item = createItemFromForm();
-  if (!item.question) {
-    setStatus("請填入題目文字。");
-    return;
-  }
-  items.unshift(item);
-  saveItems();
-  resetForm();
-  renderAll();
-  saveItemToCloud(item)
-    .then((saved) => {
-      setStatus(saved ? "已存入本機與雲端錯題庫。" : "已存入本機錯題庫。");
-    })
-    .catch((error) => setStatus(`已存本機，但雲端失敗：${error.message}`));
 });
-
-els.searchButton.addEventListener("click", () => {
-  const query = buildSearchQuery();
-  if (!query) {
-    setStatus("請先輸入題目文字。");
-    return;
-  }
-  window.open(`https://www.google.com/search?q=${encodeURIComponent(query)}`, "_blank", "noopener,noreferrer");
-});
-
-els.ocrButton.addEventListener("click", tryRecognizeText);
 els.aiSplitButton.addEventListener("click", splitPageWithAi);
-els.aiCleanButton.addEventListener("click", refineWithAi);
+els.saveRecognizedButton.addEventListener("click", saveRecognizedQuestions);
 els.saveEndpointButton.addEventListener("click", () => {
   localStorage.setItem(AI_ENDPOINT_KEY, els.aiEndpointInput.value.trim());
   setStatus("AI endpoint 已儲存。");

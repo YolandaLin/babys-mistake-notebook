@@ -65,58 +65,29 @@
                 </label>
               </div>
 
-              <div class="field-row">
-                <label>
-                  科目
-                  <select id="subjectInput" required>
-                    <option value="數學">數學</option>
-                    <option value="國語">國語</option>
-                    <option value="英文">英文</option>
-                    <option value="自然">自然</option>
-                    <option value="社會">社會</option>
-                  </select>
-                </label>
-                <label>
-                  單元
-                  <input id="topicInput" type="text" placeholder="分數、小數、文意理解" required />
-                </label>
-                <label>
-                  難度
-                  <select id="difficultyInput">
-                    <option value="1">入門</option>
-                    <option value="2" selected>普通</option>
-                    <option value="3">挑戰</option>
-                  </select>
-                </label>
+              <div class="legacy-fields" hidden>
+                <select id="subjectInput">
+                  <option value="數學">數學</option>
+                  <option value="國語">國語</option>
+                  <option value="英文">英文</option>
+                  <option value="自然">自然</option>
+                  <option value="社會" selected>社會</option>
+                </select>
+                <input id="topicInput" type="text" />
+                <select id="difficultyInput">
+                  <option value="1">入門</option>
+                  <option value="2" selected>普通</option>
+                  <option value="3">挑戰</option>
+                </select>
+                <textarea id="questionInput"></textarea>
+                <input id="answerInput" type="text" />
+                <input id="sourceInput" type="url" />
+                <textarea id="explanationInput"></textarea>
               </div>
-
-              <label>
-                題目文字
-                <textarea id="questionInput" rows="5" placeholder="OCR 後可修改，或直接貼上題目文字" required></textarea>
-              </label>
-
-              <div class="field-row">
-                <label>
-                  正確答案
-                  <input id="answerInput" type="text" placeholder="例如 3/4、B、42" />
-                </label>
-                <label>
-                  詳解來源
-                  <input id="sourceInput" type="url" placeholder="https://..." />
-                </label>
-              </div>
-
-              <label>
-                詳解筆記
-                <textarea id="explanationInput" rows="4" placeholder="查到的詳解、老師說法、孩子容易錯的點"></textarea>
-              </label>
 
               <div class="form-actions">
-                <button class="secondary-button" id="ocrButton" type="button">辨識照片文字</button>
-                <button class="secondary-button" id="aiSplitButton" type="button">AI切題辨識</button>
-                <button class="secondary-button" id="aiCleanButton" type="button">AI整理題目</button>
-                <button class="secondary-button" id="searchButton" type="button">上網找詳解</button>
-                <button class="primary-button" type="submit">存入錯題庫</button>
+                <button class="secondary-button" id="aiSplitButton" type="button">AI辨識</button>
+                <button class="primary-button" id="saveRecognizedButton" type="button">儲存JSON</button>
               </div>
               <details class="config-panel">
                 <summary>AI 後端設定</summary>

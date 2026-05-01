@@ -504,6 +504,18 @@ button:focus-visible {
   line-height: 1.45;
 }
 
+.review-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.review-fields input:disabled,
+.review-fields textarea:disabled {
+  background: #f8fafc;
+  color: #334155;
+  opacity: 1;
+}
+
 .toolbar {
   margin-bottom: 16px;
 }
