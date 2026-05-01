@@ -1,6 +1,7 @@
 const STORAGE_KEY = "mistake-practice-items-v1";
 const AI_ENDPOINT_KEY = "mistake-practice-ai-endpoint-v1";
 const STUDENT_KEY = "mistake-practice-student-v1";
+const STUDENT_LIST_KEY = "mistake-practice-students-v1";
 
 const views = {
   capture: document.querySelector("#captureView"),
@@ -21,6 +22,7 @@ const els = {
   dueCount: document.querySelector("#dueCount"),
   seedButton: document.querySelector("#seedButton"),
   loadCloudButton: document.querySelector("#loadCloudButton"),
+  studentSelect: document.querySelector("#studentSelect"),
   studentInput: document.querySelector("#studentInput"),
   navTabs: [...document.querySelectorAll(".nav-tab")],
   form: document.querySelector("#mistakeForm"),
@@ -60,8 +62,9 @@ let items = loadItems();
 let currentImage = "";
 let practiceItemId = "";
 let extractedQuestions = [];
+let savedStudents = loadStudentList();
 els.aiEndpointInput.value = localStorage.getItem(AI_ENDPOINT_KEY) || "";
-els.studentInput.value = localStorage.getItem(STUDENT_KEY) || "";
+renderStudentOptions();
 
 function makeId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -80,13 +83,44 @@ function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
-function getStudentName() {
-  return els.studentInput.value.trim() || localStorage.getItem(STUDENT_KEY) || "";
+function loadStudentList() {
+  try {
+    const students = JSON.parse(localStorage.getItem(STUDENT_LIST_KEY)) || [];
+    const current = localStorage.getItem(STUDENT_KEY);
+    return [...new Set([current, ...students].filter(Boolean))];
+  } catch {
+    return [];
+  }
 }
 
-function rememberStudent() {
-  const studentName = els.studentInput.value.trim();
-  if (studentName) localStorage.setItem(STUDENT_KEY, studentName);
+function renderStudentOptions() {
+  const current = localStorage.getItem(STUDENT_KEY) || "";
+  els.studentSelect.innerHTML = `<option value="">選擇使用者</option>`;
+  savedStudents.forEach((studentName) => {
+    const option = document.createElement("option");
+    option.value = studentName;
+    option.textContent = studentName;
+    els.studentSelect.append(option);
+  });
+  els.studentSelect.value = savedStudents.includes(current) ? current : "";
+}
+
+function getStudentName() {
+  return els.studentInput.value.trim() || els.studentSelect.value || localStorage.getItem(STUDENT_KEY) || "";
+}
+
+function rememberStudent(shouldAddToList = false) {
+  const studentName = getStudentName();
+  if (studentName) {
+    localStorage.setItem(STUDENT_KEY, studentName);
+    if (shouldAddToList) {
+      savedStudents = [...new Set([studentName, ...savedStudents])];
+      localStorage.setItem(STUDENT_LIST_KEY, JSON.stringify(savedStudents));
+      renderStudentOptions();
+      els.studentSelect.value = studentName;
+      els.studentInput.value = "";
+    }
+  }
   return studentName;
 }
 
@@ -111,6 +145,10 @@ function requireStudent() {
     return "";
   }
   return studentName;
+}
+
+function rememberSavedStudent() {
+  return rememberStudent(true);
 }
 
 function todayStart() {
@@ -225,8 +263,11 @@ function toCloudItem(item) {
 
 async function saveItemToCloud(item) {
   const endpoint = getAiEndpoint();
-  const studentName = requireStudent();
-  if (!studentName) return false;
+  const studentName = rememberSavedStudent();
+  if (!studentName) {
+    setStatus("請先輸入使用者名稱，再存錯題。");
+    return false;
+  }
   if (!endpoint) return false;
 
   const response = await fetch(endpoint, {
@@ -330,24 +371,37 @@ function renderSplitResults() {
         <span>${escapeHtml(question.topic || "未分類")}</span>
         <span>可信度 ${Number.isFinite(confidence) ? confidence : 0}%</span>
       </div>
-      <p class="split-question">${escapeHtml(question.question || "未辨識出題目文字")}</p>
       ${
         needsRetake || question.reason
           ? `<p class="split-warning">${escapeHtml(question.reason || "這題需要人工確認")}</p>`
           : ""
       }
-      <div class="review-fields" aria-label="辨識結果">
+      <div class="result-summary">
+        <div>
+          <strong>題目：</strong>
+          <span>${escapeHtml(question.question || "未辨識出題目文字")}</span>
+        </div>
+        <div>
+          <strong>答案：</strong>
+          <span>${escapeHtml(question.answer || "尚未判斷")}</span>
+        </div>
+        <div>
+          <strong>詳解：</strong>
+          <span>${escapeHtml(question.explanation || "尚未產生詳解")}</span>
+        </div>
+      </div>
+      <div class="review-fields" aria-label="編輯辨識結果" hidden>
         <label>
           題目
-          <textarea class="review-question" rows="6" disabled>${escapeHtml(question.question || "")}</textarea>
+          <textarea class="review-question" rows="6">${escapeHtml(question.question || "")}</textarea>
         </label>
         <label>
           答案
-          <textarea class="review-answer" rows="3" disabled>${escapeHtml(question.answer || "")}</textarea>
+          <textarea class="review-answer" rows="3">${escapeHtml(question.answer || "")}</textarea>
         </label>
         <label>
           詳解
-          <textarea class="review-explanation" rows="4" disabled>${escapeHtml(question.explanation || "")}</textarea>
+          <textarea class="review-explanation" rows="4">${escapeHtml(question.explanation || "")}</textarea>
         </label>
       </div>
       <div class="card-actions">
@@ -357,15 +411,18 @@ function renderSplitResults() {
     `;
 
     card.querySelector(".edit-split").addEventListener("click", (event) => {
-      const fields = [...card.querySelectorAll(".review-fields input, .review-fields textarea")];
+      const summary = card.querySelector(".result-summary");
+      const fields = card.querySelector(".review-fields");
       const isEditing = event.currentTarget.textContent === "完成";
       if (isEditing) {
         updateReviewedQuestion(index);
+        renderSplitResults();
+        setStatus(`第 ${question.questionNumber || index + 1} 題已更新，請確認後儲存。`);
+        return;
       }
-      fields.forEach((field) => {
-        field.disabled = isEditing;
-      });
-      event.currentTarget.textContent = isEditing ? "編輯" : "完成";
+      summary.hidden = true;
+      fields.hidden = false;
+      event.currentTarget.textContent = "完成";
     });
     card.querySelector(".save-split").addEventListener("click", () => {
       const reviewedQuestion = readReviewedQuestion(index);
@@ -446,6 +503,7 @@ async function splitPageWithAi() {
     setStatus("請先在 AI 後端設定貼上 Apps Script Web App endpoint。");
     return;
   }
+  if (!requireStudent()) return;
   if (!currentImage) {
     setStatus("請先拍照或選擇整頁錯題照片。");
     return;
@@ -746,6 +804,13 @@ els.saveEndpointButton.addEventListener("click", () => {
 els.studentInput.addEventListener("change", () => {
   rememberStudent();
   setStatus(`目前使用者：${getStudentName() || "未設定"}`);
+});
+els.studentSelect.addEventListener("change", () => {
+  if (els.studentSelect.value) {
+    localStorage.setItem(STUDENT_KEY, els.studentSelect.value);
+    els.studentInput.value = "";
+    setStatus(`目前使用者：${els.studentSelect.value}`);
+  }
 });
 els.loadCloudButton.addEventListener("click", loadItemsFromCloud);
 els.librarySearch.addEventListener("input", renderLibrary);
