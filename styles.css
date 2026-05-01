@@ -426,6 +426,71 @@ button:focus-visible {
   background: #f8fafc;
 }
 
+.split-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.split-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.split-heading span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.split-results {
+  display: grid;
+  gap: 12px;
+}
+
+.split-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.split-card.review {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.split-card.retake {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.split-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.split-question {
+  margin: 0;
+  color: var(--ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.split-warning {
+  margin: 0;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .toolbar {
   margin-bottom: 16px;
 }

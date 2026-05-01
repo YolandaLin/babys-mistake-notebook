@@ -33,9 +33,12 @@ const els = {
   captureStatus: document.querySelector("#captureStatus"),
   ocrButton: document.querySelector("#ocrButton"),
   searchButton: document.querySelector("#searchButton"),
+  aiSplitButton: document.querySelector("#aiSplitButton"),
   aiCleanButton: document.querySelector("#aiCleanButton"),
   aiEndpointInput: document.querySelector("#aiEndpointInput"),
   saveEndpointButton: document.querySelector("#saveEndpointButton"),
+  splitSummary: document.querySelector("#splitSummary"),
+  splitResults: document.querySelector("#splitResults"),
   librarySearch: document.querySelector("#librarySearch"),
   subjectFilter: document.querySelector("#subjectFilter"),
   mistakeList: document.querySelector("#mistakeList"),
@@ -55,6 +58,7 @@ const els = {
 let items = loadItems();
 let currentImage = "";
 let practiceItemId = "";
+let extractedQuestions = [];
 els.aiEndpointInput.value = localStorage.getItem(AI_ENDPOINT_KEY) || "";
 
 function makeId() {
@@ -167,11 +171,35 @@ function createItemFromForm() {
   };
 }
 
+function createItemFromExtracted(question) {
+  const now = new Date().toISOString();
+  return {
+    id: makeId(),
+    subject: question.subject || els.subjectInput.value,
+    topic: question.topic || els.topicInput.value.trim() || "未分類",
+    difficulty: Number(question.difficulty || 2),
+    question: question.question || "",
+    answer: question.answer || "",
+    sourceUrl: question.sourceUrl || "",
+    explanation: question.explanation || "",
+    image: currentImage,
+    createdAt: now,
+    nextReview: now,
+    interval: 1,
+    attempts: 0,
+    correct: 0,
+    wrong: 0,
+    mastered: false,
+  };
+}
+
 function resetForm() {
   els.form.reset();
   els.subjectInput.value = "數學";
   els.difficultyInput.value = "2";
   currentImage = "";
+  extractedQuestions = [];
+  renderSplitResults();
   els.imagePreview.innerHTML = `
     <svg viewBox="0 0 240 180" aria-hidden="true">
       <rect width="240" height="180" rx="14" fill="#eef2ff" />
@@ -190,6 +218,112 @@ function applyAiResult(result) {
   if (result.explanation) els.explanationInput.value = result.explanation;
   if (result.sourceUrl) els.sourceInput.value = result.sourceUrl;
   if (result.difficulty) els.difficultyInput.value = String(result.difficulty);
+}
+
+function applyExtractedQuestion(question) {
+  if (question.subject) els.subjectInput.value = question.subject;
+  if (question.topic) els.topicInput.value = question.topic;
+  if (question.question) els.questionInput.value = question.question;
+  if (question.answer) els.answerInput.value = question.answer;
+  if (question.explanation) els.explanationInput.value = question.explanation;
+  if (question.sourceUrl) els.sourceInput.value = question.sourceUrl;
+  if (question.difficulty) els.difficultyInput.value = String(question.difficulty);
+  setStatus(`已套用第 ${question.questionNumber || ""} 題，請確認後存入錯題庫。`);
+}
+
+function renderSplitResults() {
+  els.splitResults.innerHTML = "";
+  els.splitSummary.textContent = extractedQuestions.length ? `${extractedQuestions.length} 題` : "尚未切題";
+
+  extractedQuestions.forEach((question, index) => {
+    const card = document.createElement("article");
+    const needsRetake = Boolean(question.needsRetake);
+    const needsReview = Boolean(question.needsHumanReview);
+    card.className = `split-card ${needsRetake ? "retake" : needsReview ? "review" : ""}`;
+
+    const confidence = Math.round(Number(question.confidence || 0) * 100);
+    card.innerHTML = `
+      <div class="split-meta">
+        <span>第 ${escapeHtml(question.questionNumber || index + 1)} 題</span>
+        <span>${escapeHtml(question.subject || "未判斷")}</span>
+        <span>${escapeHtml(question.topic || "未分類")}</span>
+        <span>可信度 ${Number.isFinite(confidence) ? confidence : 0}%</span>
+      </div>
+      <p class="split-question">${escapeHtml(question.question || "未辨識出題目文字")}</p>
+      ${
+        needsRetake || question.reason
+          ? `<p class="split-warning">${escapeHtml(question.reason || "這題需要人工確認")}</p>`
+          : ""
+      }
+      <div class="card-actions">
+        <button class="secondary-button small use-split" type="button">套用到表單</button>
+        <button class="primary-button small save-split" type="button">直接存題</button>
+      </div>
+    `;
+
+    card.querySelector(".use-split").addEventListener("click", () => applyExtractedQuestion(question));
+    card.querySelector(".save-split").addEventListener("click", () => {
+      if (!question.question) {
+        setStatus("這題沒有可用題目文字，不能存入。");
+        return;
+      }
+      items.unshift(createItemFromExtracted(question));
+      saveItems();
+      renderAll();
+      setStatus(`第 ${question.questionNumber || index + 1} 題已存入錯題庫。`);
+    });
+
+    els.splitResults.append(card);
+  });
+}
+
+async function splitPageWithAi() {
+  const endpoint = getAiEndpoint();
+  if (!endpoint) {
+    setStatus("請先在 AI 後端設定貼上 Apps Script Web App endpoint。");
+    return;
+  }
+  if (!currentImage) {
+    setStatus("請先拍照或選擇整頁錯題照片。");
+    return;
+  }
+
+  setStatus("AI 正在切題與重建文字。");
+  els.aiSplitButton.disabled = true;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "analyzePage",
+        subject: els.subjectInput.value,
+        topic: els.topicInput.value.trim(),
+        rawText: els.questionInput.value.trim(),
+        image: dataUrlToInlineImage(currentImage),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI endpoint returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(result.error || "AI 切題失敗");
+    }
+
+    extractedQuestions = Array.isArray(result.data?.questions) ? result.data.questions : [];
+    renderSplitResults();
+    setStatus(`AI 已切出 ${extractedQuestions.length} 題，請確認後套用或存題。`);
+  } catch (error) {
+    setStatus(`AI 切題失敗：${error.message}`);
+  } finally {
+    els.aiSplitButton.disabled = false;
+  }
 }
 
 async function refineWithAi() {
@@ -514,7 +648,9 @@ els.photoInput.addEventListener("change", () => {
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     currentImage = reader.result;
+    extractedQuestions = [];
     renderImagePreview(currentImage);
+    renderSplitResults();
     setStatus("照片已加入，可辨識文字或直接存題。");
   });
   reader.readAsDataURL(file);
@@ -544,6 +680,7 @@ els.searchButton.addEventListener("click", () => {
 });
 
 els.ocrButton.addEventListener("click", tryRecognizeText);
+els.aiSplitButton.addEventListener("click", splitPageWithAi);
 els.aiCleanButton.addEventListener("click", refineWithAi);
 els.saveEndpointButton.addEventListener("click", () => {
   localStorage.setItem(AI_ENDPOINT_KEY, els.aiEndpointInput.value.trim());
@@ -557,4 +694,5 @@ els.revealButton.addEventListener("click", revealExplanation);
 els.seedButton.addEventListener("click", seedExamples);
 
 renderAll();
+renderSplitResults();
 renderPractice();

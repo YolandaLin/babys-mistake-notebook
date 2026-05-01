@@ -28,3 +28,8 @@ GitHub Pages 不能安全保存 Gemini API key，所以 AI 整理要放在後端
 - difficulty
 - confidence
 - needsHumanReview
+
+## 支援動作
+
+- `refineMistake`：整理單一題
+- `analyzePage`：分析整頁照片，回傳多題切分結果

@@ -106,6 +106,7 @@
 
               <div class="form-actions">
                 <button class="secondary-button" id="ocrButton" type="button">辨識照片文字</button>
+                <button class="secondary-button" id="aiSplitButton" type="button">AI切題辨識</button>
                 <button class="secondary-button" id="aiCleanButton" type="button">AI整理題目</button>
                 <button class="secondary-button" id="searchButton" type="button">上網找詳解</button>
                 <button class="primary-button" type="submit">存入錯題庫</button>
@@ -140,6 +141,13 @@
                   <span>先用題目文字搜尋，再把可靠連結與筆記存回來。</span>
                 </div>
               </div>
+              <section class="split-panel" aria-label="AI切題結果">
+                <div class="split-heading">
+                  <strong>AI切題結果</strong>
+                  <span id="splitSummary">尚未切題</span>
+                </div>
+                <div class="split-results" id="splitResults"></div>
+              </section>
             </aside>
           </div>
         </section>
