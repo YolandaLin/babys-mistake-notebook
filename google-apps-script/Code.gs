@@ -9,6 +9,30 @@ function doGet() {
   });
 }
 
+function testSaveMistake() {
+  return saveMistake({
+    studentName: '測試使用者',
+    item: {
+      id: Utilities.getUuid(),
+      studentName: '測試使用者',
+      subject: '測試',
+      topic: '連線測試',
+      difficulty: 1,
+      question: '這是一筆 Google Sheets 寫入測試題目。',
+      answer: '測試答案',
+      explanation: '如果你在 mistakes 工作表看到這列，代表 Sheets 寫入正常。',
+      sourceUrl: '',
+      createdAt: new Date().toISOString(),
+      nextReview: new Date().toISOString(),
+      interval: 1,
+      attempts: 0,
+      correct: 0,
+      wrong: 0,
+      mastered: false,
+    },
+  });
+}
+
 function doPost(e) {
   try {
     const input = JSON.parse(e.postData.contents || '{}');

@@ -502,7 +502,7 @@ async function saveRecognizedQuestions() {
   if (cloudCount) {
     setStatus(`已儲存 ${newItems.length} 題 JSON，其中 ${cloudCount} 題已同步雲端。`);
   } else {
-    setStatus(`已儲存 ${newItems.length} 題 JSON 到本機。`);
+    setStatus(`已儲存 ${newItems.length} 題 JSON 到本機；未同步雲端，請確認 endpoint 已儲存。`);
   }
 }
 
@@ -548,7 +548,7 @@ async function splitPageWithAi() {
 
     extractedQuestions = Array.isArray(result.data?.questions) ? result.data.questions : [];
     renderSplitResults();
-    setStatus(`AI 已切出 ${extractedQuestions.length} 題，請確認後編輯或儲存JSON。`);
+    setStatus(`AI 已切出 ${extractedQuestions.length} 題，尚未存入 Google Sheet；確認後請按儲存JSON。`);
   } catch (error) {
     setStatus(`AI 切題失敗：${error.message}`);
   } finally {
