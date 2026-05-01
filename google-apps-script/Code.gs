@@ -1,4 +1,5 @@
 const GEMINI_MODEL = 'gemini-2.5-flash';
+const DEFAULT_SPREADSHEET_ID = '1IxPZlSmAPbFL5rBICMh_lZrc36ujztsShZWUny3ZcQA';
 
 function doPost(e) {
   try {
@@ -312,7 +313,7 @@ function listMistakes(input) {
 }
 
 function getMistakeSheet() {
-  const spreadsheetId = PropertiesService.getScriptProperties().getProperty('MISTAKE_SPREADSHEET_ID');
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty('MISTAKE_SPREADSHEET_ID') || DEFAULT_SPREADSHEET_ID;
   const spreadsheet = spreadsheetId
     ? SpreadsheetApp.openById(spreadsheetId)
     : SpreadsheetApp.getActiveSpreadsheet();

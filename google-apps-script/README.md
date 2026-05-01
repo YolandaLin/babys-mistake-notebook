@@ -10,7 +10,9 @@ GitHub Pages 不能安全保存 Gemini API key，所以 AI 整理要放在後端
 4. 在 Apps Script 的「專案設定」新增 Script property：
    - key：`GEMINI_API_KEY`
    - value：你的 Gemini API key
-5. 建立或開啟一份 Google Sheets，並把 Apps Script 綁到該試算表；或在 Script property 加上：
+5. 預設資料會寫入這份 Google Sheets：
+   - `1IxPZlSmAPbFL5rBICMh_lZrc36ujztsShZWUny3ZcQA`
+   若要改成另一份 Google Sheets，可在 Script property 加上：
    - key：`MISTAKE_SPREADSHEET_ID`
    - value：Google Sheets 的試算表 ID
 6. 部署為 Web app：
