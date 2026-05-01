@@ -223,6 +223,13 @@ function updateReviewedQuestion(index) {
   extractedQuestions[index] = readReviewedQuestion(index);
 }
 
+function removeExtractedQuestion(index) {
+  const removed = extractedQuestions[index];
+  extractedQuestions.splice(index, 1);
+  renderSplitResults();
+  setStatus(`已從畫面移除第 ${removed?.questionNumber || index + 1} 題，不會存入 JSON。`);
+}
+
 function dataUrlToInlineImage(dataUrl) {
   if (!dataUrl) return null;
   const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
@@ -416,6 +423,7 @@ function renderSplitResults() {
       <div class="card-actions">
         <button class="secondary-button small edit-split" type="button">編輯</button>
         <button class="primary-button small save-split" type="button">儲存這題</button>
+        <button class="danger-button small remove-split" type="button">刪除</button>
       </div>
     `;
 
@@ -457,6 +465,7 @@ function renderSplitResults() {
         })
         .catch((error) => setStatus(`已存本機，但雲端失敗：${error.message}`));
     });
+    card.querySelector(".remove-split").addEventListener("click", () => removeExtractedQuestion(index));
 
     els.splitResults.append(card);
   });
