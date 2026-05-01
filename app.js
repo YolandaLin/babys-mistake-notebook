@@ -1,5 +1,6 @@
 const STORAGE_KEY = "mistake-practice-items-v1";
 const AI_ENDPOINT_KEY = "mistake-practice-ai-endpoint-v1";
+const STUDENT_KEY = "mistake-practice-student-v1";
 
 const views = {
   capture: document.querySelector("#captureView"),
@@ -19,6 +20,8 @@ const els = {
   viewTitle: document.querySelector("#viewTitle"),
   dueCount: document.querySelector("#dueCount"),
   seedButton: document.querySelector("#seedButton"),
+  loadCloudButton: document.querySelector("#loadCloudButton"),
+  studentInput: document.querySelector("#studentInput"),
   navTabs: [...document.querySelectorAll(".nav-tab")],
   form: document.querySelector("#mistakeForm"),
   photoInput: document.querySelector("#photoInput"),
@@ -60,6 +63,7 @@ let currentImage = "";
 let practiceItemId = "";
 let extractedQuestions = [];
 els.aiEndpointInput.value = localStorage.getItem(AI_ENDPOINT_KEY) || "";
+els.studentInput.value = localStorage.getItem(STUDENT_KEY) || "";
 
 function makeId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -76,6 +80,39 @@ function loadItems() {
 
 function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function getStudentName() {
+  return els.studentInput.value.trim() || localStorage.getItem(STUDENT_KEY) || "";
+}
+
+function rememberStudent() {
+  const studentName = els.studentInput.value.trim();
+  if (studentName) localStorage.setItem(STUDENT_KEY, studentName);
+  return studentName;
+}
+
+function requireCloudContext() {
+  const endpoint = getAiEndpoint();
+  const studentName = rememberStudent();
+  if (!studentName) {
+    setStatus("請先輸入使用者名稱。");
+    return null;
+  }
+  if (!endpoint) {
+    setStatus("請先在 AI 後端設定貼上 Apps Script Web App endpoint。");
+    return null;
+  }
+  return { endpoint, studentName };
+}
+
+function requireStudent() {
+  const studentName = rememberStudent();
+  if (!studentName) {
+    setStatus("請先輸入使用者名稱，再存錯題。");
+    return "";
+  }
+  return studentName;
 }
 
 function todayStart() {
@@ -153,6 +190,7 @@ function createItemFromForm() {
   const now = new Date().toISOString();
   return {
     id: makeId(),
+    studentName: getStudentName(),
     subject: els.subjectInput.value,
     topic: els.topicInput.value.trim(),
     difficulty: Number(els.difficultyInput.value),
@@ -175,6 +213,7 @@ function createItemFromExtracted(question) {
   const now = new Date().toISOString();
   return {
     id: makeId(),
+    studentName: getStudentName(),
     subject: question.subject || els.subjectInput.value,
     topic: question.topic || els.topicInput.value.trim() || "未分類",
     difficulty: Number(question.difficulty || 2),
@@ -191,6 +230,85 @@ function createItemFromExtracted(question) {
     wrong: 0,
     mastered: false,
   };
+}
+
+function toCloudItem(item) {
+  return {
+    ...item,
+    image: "",
+    hasLocalImage: Boolean(item.image),
+  };
+}
+
+async function saveItemToCloud(item) {
+  const endpoint = getAiEndpoint();
+  const studentName = requireStudent();
+  if (!studentName) return false;
+  if (!endpoint) return false;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    redirect: "follow",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      action: "saveMistake",
+      studentName,
+      item: toCloudItem({ ...item, studentName }),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cloud endpoint returned ${response.status}`);
+  }
+
+  const result = await response.json();
+  if (!result.ok) {
+    throw new Error(result.error || "雲端儲存失敗");
+  }
+  return true;
+}
+
+async function loadItemsFromCloud() {
+  const context = requireCloudContext();
+  if (!context) return;
+
+  setStatus("正在讀取雲端錯題。");
+  els.loadCloudButton.disabled = true;
+
+  try {
+    const response = await fetch(context.endpoint, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "listMistakes",
+        studentName: context.studentName,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud endpoint returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(result.error || "雲端讀取失敗");
+    }
+
+    items = Array.isArray(result.data?.items) ? result.data.items : [];
+    saveItems();
+    renderAll();
+    renderPractice();
+    setStatus(`已讀取 ${items.length} 題雲端錯題。`);
+  } catch (error) {
+    setStatus(`雲端讀取失敗：${error.message}`);
+  } finally {
+    els.loadCloudButton.disabled = false;
+  }
 }
 
 function resetForm() {
@@ -267,10 +385,16 @@ function renderSplitResults() {
         setStatus("這題沒有可用題目文字，不能存入。");
         return;
       }
+      if (!requireStudent()) return;
       items.unshift(createItemFromExtracted(question));
+      const item = items[0];
       saveItems();
       renderAll();
-      setStatus(`第 ${question.questionNumber || index + 1} 題已存入錯題庫。`);
+      saveItemToCloud(item)
+        .then((saved) => {
+          setStatus(saved ? `第 ${question.questionNumber || index + 1} 題已存入本機與雲端。` : `第 ${question.questionNumber || index + 1} 題已存入本機。`);
+        })
+        .catch((error) => setStatus(`已存本機，但雲端失敗：${error.message}`));
     });
 
     els.splitResults.append(card);
@@ -490,6 +614,7 @@ function updatePracticeResult(wasCorrect) {
 
   practiceItemId = "";
   saveItems();
+  saveItemToCloud(item).catch((error) => setStatus(`練習結果已存本機，但雲端同步失敗：${error.message}`));
   renderAll();
   switchView("practice");
 }
@@ -658,6 +783,7 @@ els.photoInput.addEventListener("change", () => {
 
 els.form.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (!requireStudent()) return;
   const item = createItemFromForm();
   if (!item.question) {
     setStatus("請填入題目文字。");
@@ -666,8 +792,12 @@ els.form.addEventListener("submit", (event) => {
   items.unshift(item);
   saveItems();
   resetForm();
-  setStatus("已存入錯題庫。");
   renderAll();
+  saveItemToCloud(item)
+    .then((saved) => {
+      setStatus(saved ? "已存入本機與雲端錯題庫。" : "已存入本機錯題庫。");
+    })
+    .catch((error) => setStatus(`已存本機，但雲端失敗：${error.message}`));
 });
 
 els.searchButton.addEventListener("click", () => {
@@ -686,6 +816,11 @@ els.saveEndpointButton.addEventListener("click", () => {
   localStorage.setItem(AI_ENDPOINT_KEY, els.aiEndpointInput.value.trim());
   setStatus("AI endpoint 已儲存。");
 });
+els.studentInput.addEventListener("change", () => {
+  rememberStudent();
+  setStatus(`目前使用者：${getStudentName() || "未設定"}`);
+});
+els.loadCloudButton.addEventListener("click", loadItemsFromCloud);
 els.librarySearch.addEventListener("input", renderLibrary);
 els.subjectFilter.addEventListener("change", renderLibrary);
 els.correctButton.addEventListener("click", () => updatePracticeResult(true));

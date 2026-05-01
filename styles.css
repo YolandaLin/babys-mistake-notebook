@@ -141,6 +141,19 @@ button {
   margin-bottom: 24px;
 }
 
+.topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.student-switcher {
+  width: min(220px, 100%);
+  text-align: left;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   color: var(--muted);
@@ -721,6 +734,15 @@ button:focus-visible {
   .practice-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .student-switcher {
+    width: 100%;
   }
 
   .field-row,

@@ -9,6 +9,10 @@ function doPost(e) {
       data = refineMistake(input);
     } else if (input.action === 'analyzePage') {
       data = analyzePage(input);
+    } else if (input.action === 'saveMistake') {
+      data = saveMistake(input);
+    } else if (input.action === 'listMistakes') {
+      data = listMistakes(input);
     } else {
       throw new Error('Unknown action');
     }
@@ -230,6 +234,126 @@ function analyzePage(input) {
     reason: String(question.reason || ''),
   }));
   return result;
+}
+
+function saveMistake(input) {
+  const studentName = normalizeStudentName(input.studentName);
+  const item = input.item || {};
+  if (!studentName) throw new Error('Missing studentName');
+  if (!item.question) throw new Error('Missing question');
+
+  const sheet = getMistakeSheet();
+  const now = new Date().toISOString();
+  const id = item.id || Utilities.getUuid();
+  sheet.appendRow([
+    studentName,
+    id,
+    item.subject || '',
+    item.topic || '',
+    item.difficulty || 2,
+    item.question || '',
+    item.answer || '',
+    item.explanation || '',
+    item.sourceUrl || '',
+    item.createdAt || now,
+    item.nextReview || now,
+    item.interval || 1,
+    item.attempts || 0,
+    item.correct || 0,
+    item.wrong || 0,
+    item.mastered ? 'TRUE' : 'FALSE',
+    JSON.stringify(item),
+    now,
+  ]);
+  return { id };
+}
+
+function listMistakes(input) {
+  const studentName = normalizeStudentName(input.studentName);
+  if (!studentName) throw new Error('Missing studentName');
+
+  const sheet = getMistakeSheet();
+  const values = sheet.getDataRange().getValues();
+  const rows = values.slice(1);
+  const byId = {};
+
+  rows.forEach((row) => {
+    if (String(row[0]) !== studentName) return;
+    const id = String(row[1] || '');
+    if (!id) return;
+    let item;
+    try {
+      item = JSON.parse(row[16] || '{}');
+    } catch {
+      item = {};
+    }
+    byId[id] = {
+      id,
+      studentName,
+      subject: item.subject || row[2] || '',
+      topic: item.topic || row[3] || '',
+      difficulty: Number(item.difficulty || row[4] || 2),
+      question: item.question || row[5] || '',
+      answer: item.answer || row[6] || '',
+      explanation: item.explanation || row[7] || '',
+      sourceUrl: item.sourceUrl || row[8] || '',
+      image: '',
+      createdAt: item.createdAt || row[9] || new Date().toISOString(),
+      nextReview: item.nextReview || row[10] || new Date().toISOString(),
+      interval: Number(item.interval || row[11] || 1),
+      attempts: Number(item.attempts || row[12] || 0),
+      correct: Number(item.correct || row[13] || 0),
+      wrong: Number(item.wrong || row[14] || 0),
+      mastered: String(item.mastered || row[15]).toUpperCase() === 'TRUE',
+    };
+  });
+
+  return { items: Object.values(byId) };
+}
+
+function getMistakeSheet() {
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty('MISTAKE_SPREADSHEET_ID');
+  const spreadsheet = spreadsheetId
+    ? SpreadsheetApp.openById(spreadsheetId)
+    : SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) {
+    throw new Error('Missing spreadsheet. Bind this script to a Google Sheet or set MISTAKE_SPREADSHEET_ID.');
+  }
+
+  const sheetName = 'mistakes';
+  let sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(sheetName);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      'studentName',
+      'id',
+      'subject',
+      'topic',
+      'difficulty',
+      'question',
+      'answer',
+      'explanation',
+      'sourceUrl',
+      'createdAt',
+      'nextReview',
+      'interval',
+      'attempts',
+      'correct',
+      'wrong',
+      'mastered',
+      'json',
+      'savedAt',
+    ]);
+  }
+
+  return sheet;
+}
+
+function normalizeStudentName(value) {
+  return String(value || '').trim().slice(0, 40);
 }
 
 function jsonOutput(value) {

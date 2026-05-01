@@ -43,7 +43,14 @@
             <p class="eyebrow">Kid practice mode</p>
             <h1 id="viewTitle">拍照存題</h1>
           </div>
-          <button class="ghost-button" id="seedButton" type="button">載入範例</button>
+          <div class="topbar-actions">
+            <label class="student-switcher">
+              使用者
+              <input id="studentInput" type="text" placeholder="例如：小寶" />
+            </label>
+            <button class="ghost-button" id="loadCloudButton" type="button">讀取雲端</button>
+            <button class="ghost-button" id="seedButton" type="button">載入範例</button>
+          </div>
         </section>
 
         <section class="view active" id="captureView" aria-labelledby="captureTitle">
