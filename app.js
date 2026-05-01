@@ -179,7 +179,16 @@ function setStatus(message) {
 }
 
 function getAiEndpoint() {
-  return els.aiEndpointInput.value.trim() || localStorage.getItem(AI_ENDPOINT_KEY) || "";
+  return normalizeAppsScriptEndpoint(els.aiEndpointInput.value.trim() || localStorage.getItem(AI_ENDPOINT_KEY) || "");
+}
+
+function normalizeAppsScriptEndpoint(value) {
+  const endpoint = value.trim();
+  if (!endpoint) return "";
+  if (endpoint.startsWith("AKfy")) {
+    return `https://script.google.com/macros/s/${endpoint}/exec`;
+  }
+  return endpoint;
 }
 
 function switchView(viewName) {
@@ -798,7 +807,9 @@ els.form.addEventListener("submit", (event) => {
 els.aiSplitButton.addEventListener("click", splitPageWithAi);
 els.saveRecognizedButton.addEventListener("click", saveRecognizedQuestions);
 els.saveEndpointButton.addEventListener("click", () => {
-  localStorage.setItem(AI_ENDPOINT_KEY, els.aiEndpointInput.value.trim());
+  const endpoint = normalizeAppsScriptEndpoint(els.aiEndpointInput.value.trim());
+  localStorage.setItem(AI_ENDPOINT_KEY, endpoint);
+  els.aiEndpointInput.value = endpoint;
   setStatus("AI endpoint 已儲存。");
 });
 els.studentInput.addEventListener("change", () => {

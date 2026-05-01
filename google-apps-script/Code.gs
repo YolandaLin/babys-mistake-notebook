@@ -1,6 +1,14 @@
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const DEFAULT_SPREADSHEET_ID = '1IxPZlSmAPbFL5rBICMh_lZrc36ujztsShZWUny3ZcQA';
 
+function doGet() {
+  return jsonOutput({
+    ok: true,
+    service: 'babys-mistake-notebook',
+    time: new Date().toISOString(),
+  });
+}
+
 function doPost(e) {
   try {
     const input = JSON.parse(e.postData.contents || '{}');
