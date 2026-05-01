@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>錯題練習站</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主要導覽">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M12 10h18c3.8 0 7 3.2 7 7v21H12V10Z" fill="#ffffff" />
+              <path d="M17 16h14M17 22h10M17 28h15" stroke="#2563eb" stroke-width="3" stroke-linecap="round" />
+              <path d="M36 16h6v22h-6V16Z" fill="#f59e0b" />
+            </svg>
+          </div>
+          <div>
+            <strong>錯題練習站</strong>
+            <span>拍照、整理、再練</span>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="功能分頁">
+          <button class="nav-tab active" data-view="capture">拍照存題</button>
+          <button class="nav-tab" data-view="library">錯題庫</button>
+          <button class="nav-tab" data-view="practice">重複練習</button>
+          <button class="nav-tab" data-view="dashboard">學習狀態</button>
+        </nav>
+
+        <section class="mini-panel">
+          <span class="panel-label">今日到期</span>
+          <strong id="dueCount">0</strong>
+          <small>題需要再看一次</small>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <section class="topbar">
+          <div>
+            <p class="eyebrow">Kid practice mode</p>
+            <h1 id="viewTitle">拍照存題</h1>
+          </div>
+          <button class="ghost-button" id="seedButton" type="button">載入範例</button>
+        </section>
+
+        <section class="view active" id="captureView" aria-labelledby="captureTitle">
+          <div class="capture-grid">
+            <form class="capture-form" id="mistakeForm">
+              <div class="upload-zone">
+                <input id="photoInput" name="photo" type="file" accept="image/*" capture="environment" />
+                <label for="photoInput">
+                  <span class="upload-icon" aria-hidden="true"></span>
+                  <strong>拍照或選擇錯題</strong>
+                  <small>照片只會先存在這台裝置</small>
+                </label>
+              </div>
+
+              <div class="field-row">
+                <label>
+                  科目
+                  <select id="subjectInput" required>
+                    <option value="數學">數學</option>
+                    <option value="國語">國語</option>
+                    <option value="英文">英文</option>
+                    <option value="自然">自然</option>
+                    <option value="社會">社會</option>
+                  </select>
+                </label>
+                <label>
+                  單元
+                  <input id="topicInput" type="text" placeholder="分數、小數、文意理解" required />
+                </label>
+                <label>
+                  難度
+                  <select id="difficultyInput">
+                    <option value="1">入門</option>
+                    <option value="2" selected>普通</option>
+                    <option value="3">挑戰</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                題目文字
+                <textarea id="questionInput" rows="5" placeholder="OCR 後可修改，或直接貼上題目文字" required></textarea>
+              </label>
+
+              <div class="field-row">
+                <label>
+                  正確答案
+                  <input id="answerInput" type="text" placeholder="例如 3/4、B、42" />
+                </label>
+                <label>
+                  詳解來源
+                  <input id="sourceInput" type="url" placeholder="https://..." />
+                </label>
+              </div>
+
+              <label>
+                詳解筆記
+                <textarea id="explanationInput" rows="4" placeholder="查到的詳解、老師說法、孩子容易錯的點"></textarea>
+              </label>
+
+              <div class="form-actions">
+                <button class="secondary-button" id="ocrButton" type="button">辨識照片文字</button>
+                <button class="secondary-button" id="searchButton" type="button">上網找詳解</button>
+                <button class="primary-button" type="submit">存入錯題庫</button>
+              </div>
+              <p class="status-line" id="captureStatus" role="status"></p>
+            </form>
+
+            <aside class="preview-panel">
+              <div class="image-preview" id="imagePreview">
+                <svg viewBox="0 0 240 180" aria-hidden="true">
+                  <rect width="240" height="180" rx="14" fill="#eef2ff" />
+                  <path d="M45 52h150v96H45z" fill="#fff" />
+                  <path d="M66 78h95M66 102h70M66 126h86" stroke="#64748b" stroke-width="8" stroke-linecap="round" />
+                  <circle cx="184" cy="58" r="18" fill="#f59e0b" />
+                </svg>
+              </div>
+              <div class="hint-stack">
+                <div>
+                  <strong>複習規則</strong>
+                  <span>答錯會排到明天；連續答對會拉長間隔。</span>
+                </div>
+                <div>
+                  <strong>詳解策略</strong>
+                  <span>先用題目文字搜尋，再把可靠連結與筆記存回來。</span>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="libraryView" aria-labelledby="libraryTitle">
+          <div class="toolbar">
+            <input id="librarySearch" type="search" placeholder="搜尋科目、單元或題目" />
+            <select id="subjectFilter">
+              <option value="">全部科目</option>
+              <option value="數學">數學</option>
+              <option value="國語">國語</option>
+              <option value="英文">英文</option>
+              <option value="自然">自然</option>
+              <option value="社會">社會</option>
+            </select>
+          </div>
+          <div class="mistake-list" id="mistakeList"></div>
+        </section>
+
+        <section class="view" id="practiceView" aria-labelledby="practiceTitle">
+          <div class="practice-layout">
+            <article class="practice-card" id="practiceCard"></article>
+            <aside class="answer-panel">
+              <label>
+                我的答案
+                <input id="practiceAnswer" type="text" autocomplete="off" />
+              </label>
+              <div class="practice-actions">
+                <button class="primary-button" id="correctButton" type="button">答對</button>
+                <button class="danger-button" id="wrongButton" type="button">還不熟</button>
+              </div>
+              <button class="secondary-button full-width" id="revealButton" type="button">看詳解</button>
+              <div class="explanation-box" id="practiceExplanation"></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="dashboardView" aria-labelledby="dashboardTitle">
+          <div class="stats-grid">
+            <article class="stat-card">
+              <span>總錯題</span>
+              <strong id="totalCount">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>已熟練</span>
+              <strong id="masteredCount">0</strong>
+            </article>
+            <article class="stat-card">
+              <span>平均答對率</span>
+              <strong id="accuracyRate">0%</strong>
+            </article>
+          </div>
+          <div class="chart-panel">
+            <h2>科目分布</h2>
+            <div id="subjectBars" class="subject-bars"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="mistakeCardTemplate">
+      <article class="mistake-card">
+        <div class="thumb"></div>
+        <div class="mistake-content">
+          <div class="card-meta"></div>
+          <h3></h3>
+          <p></p>
+          <div class="card-actions">
+            <button class="secondary-button small explain-button" type="button">找詳解</button>
+            <button class="secondary-button small edit-button" type="button">練這題</button>
+            <button class="danger-button small delete-button" type="button">刪除</button>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
