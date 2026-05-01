@@ -467,6 +467,7 @@ function renderSplitResults() {
       </div>
       <div class="card-actions">
         ${isCollapsed ? `<button class="secondary-button small expand-split" type="button">展開</button>` : ""}
+        <button class="primary-button small save-one-split" type="button">${isCollapsed ? "重新儲存" : "儲存此題"}</button>
         <button class="danger-button small remove-split" type="button">刪除</button>
       </div>
     `;
@@ -474,8 +475,9 @@ function renderSplitResults() {
     card.querySelector(".expand-split")?.addEventListener("click", () => {
       extractedQuestions[index] = { ...question, collapsed: false, saved: false };
       renderSplitResults();
-      setStatus(`第 ${question.questionNumber || index + 1} 題已展開，可修改後再按儲存JSON。`);
+      setStatus(`第 ${question.questionNumber || index + 1} 題已展開，可修改後儲存此題或全部儲存。`);
     });
+    card.querySelector(".save-one-split").addEventListener("click", () => saveRecognizedEntries([{ question: readReviewedQuestion(index), index }]));
     card.querySelector(".remove-split").addEventListener("click", () => removeExtractedQuestion(index));
 
     els.splitResults.append(card);
@@ -500,6 +502,18 @@ async function saveRecognizedQuestions() {
     .map((_, index) => ({ question: readReviewedQuestion(index), index }))
     .filter((entry) => entry.question.question?.trim() && !entry.question.saved);
 
+  await saveRecognizedEntries(reviewedQuestions);
+}
+
+async function saveRecognizedEntries(reviewedQuestions) {
+  if (!requireStudent()) return;
+
+  if (!reviewedQuestions.length) {
+    setStatus("沒有可儲存的題目文字。");
+    return;
+  }
+
+  reviewedQuestions = reviewedQuestions.filter((entry) => entry.question.question?.trim());
   if (!reviewedQuestions.length) {
     setStatus("沒有可儲存的題目文字。");
     return;
@@ -579,7 +593,7 @@ async function splitPageWithAi() {
     extractedQuestions = Array.isArray(result.data?.questions) ? result.data.questions : [];
     currentImage = "";
     renderSplitResults();
-    setStatus(`AI 已切出 ${extractedQuestions.length} 題，照片已清除；確認後請按儲存JSON。`);
+    setStatus(extractedQuestions.length ? `AI 已切出 ${extractedQuestions.length} 題疑似錯題，照片已清除。` : "AI 沒有找到明確錯題痕跡。");
   } catch (error) {
     setStatus(`AI 切題失敗：${error.message}`);
   } finally {
