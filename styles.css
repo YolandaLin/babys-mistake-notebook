@@ -193,7 +193,12 @@ h2 {
   display: block;
 }
 
-.capture-grid,
+.capture-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 3fr) minmax(0, 7fr);
+  gap: 22px;
+}
+
 .practice-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);

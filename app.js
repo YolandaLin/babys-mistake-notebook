@@ -263,9 +263,11 @@ function openExplanationSearch(question, subject = "") {
 
 function createItemFromExtracted(question) {
   const now = new Date().toISOString();
+  const studentName = getStudentName();
   return {
     id: question.savedItemId || makeId(),
-    studentName: getStudentName(),
+    studentName,
+    loginUser: studentName,
     subject: question.subject || els.subjectInput.value,
     topic: question.topic || els.topicInput.value.trim() || "未分類",
     difficulty: Number(question.difficulty || 2),
@@ -310,6 +312,7 @@ async function saveItemToCloud(item) {
     body: JSON.stringify({
       action: "saveMistake",
       studentName,
+      loginUser: studentName,
       item: toCloudItem({ ...item, studentName }),
     }),
   });

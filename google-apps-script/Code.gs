@@ -12,6 +12,7 @@ function doGet() {
 function testSaveMistake() {
   return saveMistake({
     studentName: '測試使用者',
+    loginUser: 'test@example.com',
     item: {
       id: Utilities.getUuid(),
       studentName: '測試使用者',
@@ -283,6 +284,9 @@ function saveMistake(input) {
   const sheet = getMistakeSheet();
   const now = new Date().toISOString();
   const id = item.id || Utilities.getUuid();
+  const loginUser = getLoginUser(input, studentName);
+  item.studentName = studentName;
+  item.loginUser = loginUser;
   const rowValues = [
     studentName,
     id,
@@ -302,6 +306,7 @@ function saveMistake(input) {
     item.mastered ? 'TRUE' : 'FALSE',
     JSON.stringify(item),
     now,
+    loginUser,
   ];
   const rowIndex = findMistakeRow(sheet, studentName, id);
   if (rowIndex) {
@@ -353,6 +358,7 @@ function listMistakes(input) {
     byId[id] = {
       id,
       studentName,
+      loginUser: item.loginUser || row[18] || '',
       subject: item.subject || row[2] || '',
       topic: item.topic || row[3] || '',
       difficulty: Number(item.difficulty || row[4] || 2),
@@ -389,30 +395,45 @@ function getMistakeSheet() {
     sheet = spreadsheet.insertSheet(sheetName);
   }
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow([
-      'studentName',
-      'id',
-      'subject',
-      'topic',
-      'difficulty',
-      'question',
-      'answer',
-      'explanation',
-      'sourceUrl',
-      'createdAt',
-      'nextReview',
-      'interval',
-      'attempts',
-      'correct',
-      'wrong',
-      'mastered',
-      'json',
-      'savedAt',
-    ]);
-  }
+  ensureMistakeSheetHeaders(sheet);
 
   return sheet;
+}
+
+function ensureMistakeSheetHeaders(sheet) {
+  const headers = [
+    'studentName',
+    'id',
+    'subject',
+    'topic',
+    'difficulty',
+    'question',
+    'answer',
+    'explanation',
+    'sourceUrl',
+    'createdAt',
+    'nextReview',
+    'interval',
+    'attempts',
+    'correct',
+    'wrong',
+    'mastered',
+    'json',
+    'savedAt',
+    'loginUser',
+  ];
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(headers);
+    return;
+  }
+
+  const existingHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), headers.length)).getValues()[0];
+  headers.forEach((header, index) => {
+    if (existingHeaders[index] !== header) {
+      sheet.getRange(1, index + 1).setValue(header);
+    }
+  });
 }
 
 function findMistakeRow(sheet, studentName, id) {
@@ -427,6 +448,20 @@ function findMistakeRow(sheet, studentName, id) {
 
 function normalizeStudentName(value) {
   return String(value || '').trim().slice(0, 40);
+}
+
+function getLoginUser(input, fallback) {
+  const activeEmail = Session.getActiveUser().getEmail();
+  if (activeEmail) return activeEmail.slice(0, 120);
+
+  const item = input.item || {};
+  const explicitUser = String(input.loginUser || item.loginUser || '').trim();
+  if (explicitUser) return explicitUser.slice(0, 120);
+
+  const effectiveEmail = Session.getEffectiveUser().getEmail();
+  if (effectiveEmail) return effectiveEmail.slice(0, 120);
+
+  return String(fallback || '').trim().slice(0, 120);
 }
 
 function jsonOutput(value) {
