@@ -40,6 +40,8 @@ GitHub Pages 不能安全保存 Gemini API key，所以 AI 整理要放在後端
 
 - `refineMistake`：整理單一題
 - `analyzePage`：分析整頁照片，回傳多題切分結果
+- `solveMistake`：依錯題文字產生答案與詳解
 - `analyzeExamReport`：依多題錯題產生考卷級分析報告
 - `saveMistake`：依使用者名稱把錯題 JSON 存到 Google Sheets
 - `listMistakes`：依使用者名稱讀取雲端錯題
+- `deleteMistake`：刪除指定使用者的單題錯題

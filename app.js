@@ -277,10 +277,107 @@ function dataUrlToInlineImage(dataUrl) {
   };
 }
 
-function openExplanationSearch(question, subject = "") {
-  const query = [subject, question, "詳解"].filter(Boolean).join(" ");
-  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
-  window.open(url, "_blank", "noopener,noreferrer");
+async function requestAiSolution(item, options = {}) {
+  const endpoint = getAiEndpoint();
+  if (!endpoint) {
+    throw new Error("請先在 AI 後端設定貼上 Apps Script Web App endpoint");
+  }
+  if (!item.question?.trim()) {
+    throw new Error("這題沒有題目文字，無法 AI 解題");
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    redirect: "follow",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      action: "solveMistake",
+      studentName: getStudentName() || item.studentName || "",
+      trustedAnswer: Boolean(options.trustedAnswer),
+      item: {
+        subject: item.subject || "",
+        topic: item.topic || "",
+        question: item.question || "",
+        answer: item.answer || "",
+        explanation: item.explanation || "",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI endpoint returned ${response.status}`);
+  }
+
+  const result = await response.json();
+  if (!result.ok) {
+    throw new Error(result.error || "AI 解題失敗");
+  }
+
+  return result.data || {};
+}
+
+async function solveMistakeWithAi(item, button) {
+  const originalText = button?.textContent || "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "解題中";
+  }
+  setStatus("AI 正在解題。");
+
+  try {
+    const solved = await requestAiSolution(item);
+    item.subject = String(solved.subject || item.subject || "");
+    item.topic = String(solved.topic || item.topic || "");
+    item.answer = String(solved.answer || item.answer || "");
+    item.explanation = String(solved.explanation || item.explanation || "");
+    item.difficulty = Math.min(3, Math.max(1, Number(solved.difficulty || item.difficulty || 2)));
+
+    saveItems();
+    renderAll();
+    renderPractice();
+
+    try {
+      if (getStudentName()) await saveItemToCloud(item);
+      setStatus("AI 解題完成，已更新錯題詳解。");
+    } catch (error) {
+      setStatus(`AI 解題完成並已存本機，但雲端同步失敗：${error.message}`);
+    }
+  } catch (error) {
+    setStatus(`AI 解題失敗：${error.message}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+async function refreshExplanationsForCorrectedAnswers(reviewedQuestions) {
+  const changedEntries = reviewedQuestions.filter((entry) => {
+    const original = extractedQuestions[entry.index] || {};
+    const originalAnswer = String(original.answer || "").trim();
+    const reviewedAnswer = String(entry.question.answer || "").trim();
+    return reviewedAnswer && reviewedAnswer !== originalAnswer;
+  });
+
+  if (!changedEntries.length) return reviewedQuestions;
+
+  setStatus(`答案已修改，AI 正在重新產生 ${changedEntries.length} 題詳解。`);
+  for (const entry of changedEntries) {
+    const solved = await requestAiSolution(entry.question, { trustedAnswer: true });
+    entry.question = {
+      ...entry.question,
+      subject: String(solved.subject || entry.question.subject || ""),
+      topic: String(solved.topic || entry.question.topic || ""),
+      answer: String(entry.question.answer || solved.answer || ""),
+      explanation: String(solved.explanation || entry.question.explanation || ""),
+      difficulty: Math.min(3, Math.max(1, Number(solved.difficulty || entry.question.difficulty || 2))),
+    };
+  }
+
+  return reviewedQuestions;
 }
 
 function createItemFromExtracted(question) {
@@ -544,6 +641,13 @@ async function saveRecognizedEntries(reviewedQuestions) {
     return;
   }
 
+  try {
+    reviewedQuestions = await refreshExplanationsForCorrectedAnswers(reviewedQuestions);
+  } catch (error) {
+    setStatus(`答案已修改，但重新產生詳解失敗：${error.message}`);
+    return;
+  }
+
   const newItems = reviewedQuestions.map((entry) => createItemFromExtracted(entry.question));
   upsertLocalItems(newItems);
   saveItems();
@@ -777,8 +881,8 @@ function renderLibrary() {
     title.textContent = item.question || "未填題目文字";
     body.textContent = item.explanation || item.answer || "尚未加入詳解";
 
-    node.querySelector(".explain-button").addEventListener("click", () => {
-      openExplanationSearch(item.question, item.subject);
+    node.querySelector(".explain-button").addEventListener("click", (event) => {
+      solveMistakeWithAi(item, event.currentTarget);
     });
     node.querySelector(".edit-button").addEventListener("click", () => {
       practiceItemId = item.id;

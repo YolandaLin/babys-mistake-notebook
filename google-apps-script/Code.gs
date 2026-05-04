@@ -43,6 +43,8 @@ function doPost(e) {
       data = refineMistake(input);
     } else if (input.action === 'analyzePage') {
       data = analyzePage(input);
+    } else if (input.action === 'solveMistake') {
+      data = solveMistake(input);
     } else if (input.action === 'analyzeExamReport') {
       data = analyzeExamReport(input);
     } else if (input.action === 'saveMistake') {
@@ -274,6 +276,93 @@ function analyzePage(input) {
     needsRetake: Boolean(question.needsRetake),
     reason: String(question.reason || ''),
   }));
+  return result;
+}
+
+function solveMistake(input) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) throw new Error('Missing GEMINI_API_KEY in Script Properties');
+
+  const item = input.item || {};
+  if (!item.question) throw new Error('Missing question');
+  const trustedAnswer = Boolean(input.trustedAnswer && item.answer);
+
+  const parts = [
+    {
+      text:
+        '你是台灣國小與國中解題老師。請根據錯題資料產生正確答案與給孩子看的詳解。' +
+        '詳解要用清楚步驟說明，不要只給結論；如果題目資訊不足，不要猜答案，answer 留空，explanation 說明需要補充哪些條件。' +
+        '如果 trustedAnswer 為 true，代表使用者已人工填入正確答案，請以 existingAnswer 作為正解重新推導詳解；除非題目與答案明顯矛盾，否則不要改答案。' +
+        '如果 trustedAnswer 為 false，請檢查既有答案與詳解，不要盲目照抄。輸出必須是 JSON，不要 Markdown。',
+    },
+    {
+      text: JSON.stringify({
+        studentName: input.studentName || '',
+        subjectHint: item.subject || '',
+        topicHint: item.topic || '',
+        question: item.question || '',
+        existingAnswer: item.answer || '',
+        existingExplanation: item.explanation || '',
+        trustedAnswer,
+        outputShape: {
+          subject: '科目',
+          topic: '單元或考點',
+          answer: '可判斷才填，否則空字串',
+          explanation: '分步驟、給孩子看的詳解',
+          difficulty: '1, 2, or 3',
+          confidence: '0-1',
+          needsHumanReview: true,
+        },
+      }),
+    },
+  ];
+
+  const payload = {
+    contents: [{ parts }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          subject: { type: 'STRING' },
+          topic: { type: 'STRING' },
+          answer: { type: 'STRING' },
+          explanation: { type: 'STRING' },
+          difficulty: { type: 'INTEGER' },
+          confidence: { type: 'NUMBER' },
+          needsHumanReview: { type: 'BOOLEAN' },
+        },
+        required: ['subject', 'topic', 'answer', 'explanation', 'difficulty', 'confidence', 'needsHumanReview'],
+      },
+    },
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+
+  const status = response.getResponseCode();
+  const body = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error(`Gemini API ${status}: ${body}`);
+  }
+
+  const parsed = JSON.parse(body);
+  const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini returned no text');
+
+  const result = JSON.parse(text);
+  result.subject = String(result.subject || item.subject || '');
+  result.topic = String(result.topic || item.topic || '');
+  result.answer = String(result.answer || '');
+  result.explanation = String(result.explanation || '');
+  result.difficulty = Math.min(3, Math.max(1, Number(result.difficulty || item.difficulty || 2)));
+  result.confidence = Math.min(1, Math.max(0, Number(result.confidence || 0)));
+  result.needsHumanReview = Boolean(result.needsHumanReview);
   return result;
 }
 
