@@ -43,6 +43,8 @@ function doPost(e) {
       data = refineMistake(input);
     } else if (input.action === 'analyzePage') {
       data = analyzePage(input);
+    } else if (input.action === 'analyzeExamReport') {
+      data = analyzeExamReport(input);
     } else if (input.action === 'saveMistake') {
       data = saveMistake(input);
     } else if (input.action === 'listMistakes') {
@@ -272,6 +274,181 @@ function analyzePage(input) {
     needsRetake: Boolean(question.needsRetake),
     reason: String(question.reason || ''),
   }));
+  return result;
+}
+
+function analyzeExamReport(input) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  if (!apiKey) throw new Error('Missing GEMINI_API_KEY in Script Properties');
+
+  const questions = Array.isArray(input.questions) ? input.questions : [];
+  if (!questions.length) throw new Error('Missing questions');
+
+  const parts = [
+    {
+      text:
+        '你是台灣國小與國中錯題分析老師。請根據多題錯題資料，產生一份考卷級錯題分析報告。' +
+        '重點不是重複題目，而是診斷孩子卡住的概念、建立解題流程、整理考前小抄，並產生類題練習。' +
+        '如果學生答案未知，studentAnswer 留空；如果正解未知，correctAnswer 留空，不要捏造。' +
+        '類題要對應錯因與考點，難度接近原題，解析要短而清楚。' +
+        '輸出必須是 JSON，不要 Markdown。',
+    },
+    {
+      text: JSON.stringify({
+        studentName: input.studentName || '',
+        subjectHint: input.subject || '',
+        questions,
+        outputShape: {
+          subject: '科目或單元',
+          summary: '整體診斷摘要',
+          diagnosisRows: [
+            {
+              questionNumber: '題號',
+              studentAnswer: '學生答案，不知道則空字串',
+              correctAnswer: '正解，不知道則空字串',
+              concept: '考點',
+              mistakeReason: '孩子可能卡住的地方',
+              guidance: '家長或老師可用的一句引導語',
+            },
+          ],
+          focusAreas: [
+            {
+              title: '補強重點標題',
+              detail: '具體說明',
+              tags: ['關鍵詞'],
+            },
+          ],
+          reviewSteps: [
+            {
+              title: '固定解題步驟',
+              detail: '怎麼做',
+            },
+          ],
+          cheatSheet: [
+            {
+              title: '考前小抄標題',
+              detail: '孩子考前要記住的短句',
+            },
+          ],
+          practiceQuestions: [
+            {
+              question: '類題題目',
+              choices: ['A ...', 'B ...', 'C ...', 'D ...'],
+              answer: '答案',
+              explanation: '解析',
+              linkedConcept: '對應考點',
+            },
+          ],
+        },
+      }),
+    },
+  ];
+
+  const payload = {
+    contents: [{ parts }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          subject: { type: 'STRING' },
+          summary: { type: 'STRING' },
+          diagnosisRows: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                questionNumber: { type: 'STRING' },
+                studentAnswer: { type: 'STRING' },
+                correctAnswer: { type: 'STRING' },
+                concept: { type: 'STRING' },
+                mistakeReason: { type: 'STRING' },
+                guidance: { type: 'STRING' },
+              },
+              required: ['questionNumber', 'studentAnswer', 'correctAnswer', 'concept', 'mistakeReason', 'guidance'],
+            },
+          },
+          focusAreas: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                title: { type: 'STRING' },
+                detail: { type: 'STRING' },
+                tags: {
+                  type: 'ARRAY',
+                  items: { type: 'STRING' },
+                },
+              },
+              required: ['title', 'detail', 'tags'],
+            },
+          },
+          reviewSteps: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                title: { type: 'STRING' },
+                detail: { type: 'STRING' },
+              },
+              required: ['title', 'detail'],
+            },
+          },
+          cheatSheet: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                title: { type: 'STRING' },
+                detail: { type: 'STRING' },
+              },
+              required: ['title', 'detail'],
+            },
+          },
+          practiceQuestions: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                question: { type: 'STRING' },
+                choices: {
+                  type: 'ARRAY',
+                  items: { type: 'STRING' },
+                },
+                answer: { type: 'STRING' },
+                explanation: { type: 'STRING' },
+                linkedConcept: { type: 'STRING' },
+              },
+              required: ['question', 'choices', 'answer', 'explanation', 'linkedConcept'],
+            },
+          },
+        },
+        required: ['subject', 'summary', 'diagnosisRows', 'focusAreas', 'reviewSteps', 'cheatSheet', 'practiceQuestions'],
+      },
+    },
+  };
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+
+  const status = response.getResponseCode();
+  const body = response.getContentText();
+  if (status < 200 || status >= 300) {
+    throw new Error(`Gemini API ${status}: ${body}`);
+  }
+
+  const parsed = JSON.parse(body);
+  const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error('Gemini returned no text');
+
+  const result = JSON.parse(text);
+  result.id = Utilities.getUuid();
+  result.createdAt = new Date().toISOString();
   return result;
 }
 

@@ -2,12 +2,14 @@ const STORAGE_KEY = "mistake-practice-items-v1";
 const AI_ENDPOINT_KEY = "mistake-practice-ai-endpoint-v1";
 const STUDENT_KEY = "mistake-practice-student-v1";
 const STUDENT_LIST_KEY = "mistake-practice-students-v1";
+const REPORTS_KEY = "mistake-practice-exam-reports-v1";
 
 const views = {
   capture: document.querySelector("#captureView"),
   library: document.querySelector("#libraryView"),
   practice: document.querySelector("#practiceView"),
   dashboard: document.querySelector("#dashboardView"),
+  report: document.querySelector("#reportView"),
 };
 
 const titles = {
@@ -15,6 +17,7 @@ const titles = {
   library: "錯題庫",
   practice: "重複練習",
   dashboard: "學習狀態",
+  report: "考卷報告",
 };
 
 const els = {
@@ -37,6 +40,7 @@ const els = {
   explanationInput: document.querySelector("#explanationInput"),
   captureStatus: document.querySelector("#captureStatus"),
   aiSplitButton: document.querySelector("#aiSplitButton"),
+  generateReportButton: document.querySelector("#generateReportButton"),
   saveRecognizedButton: document.querySelector("#saveRecognizedButton"),
   aiEndpointInput: document.querySelector("#aiEndpointInput"),
   saveEndpointButton: document.querySelector("#saveEndpointButton"),
@@ -56,12 +60,17 @@ const els = {
   masteredCount: document.querySelector("#masteredCount"),
   accuracyRate: document.querySelector("#accuracyRate"),
   subjectBars: document.querySelector("#subjectBars"),
+  reportCount: document.querySelector("#reportCount"),
+  reportList: document.querySelector("#reportList"),
+  reportDetails: document.querySelector("#reportDetails"),
 };
 
 let items = loadItems();
 let currentImage = "";
 let practiceItemId = "";
 let extractedQuestions = [];
+let reports = loadReports();
+let currentReportId = reports[0]?.id || "";
 let savedStudents = loadStudentList();
 els.aiEndpointInput.value = localStorage.getItem(AI_ENDPOINT_KEY) || "";
 renderStudentOptions();
@@ -81,6 +90,18 @@ function loadItems() {
 
 function saveItems() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+}
+
+function loadReports() {
+  try {
+    return JSON.parse(localStorage.getItem(REPORTS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReports() {
+  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
 }
 
 function loadStudentList() {
@@ -203,6 +224,7 @@ function switchView(viewName) {
   if (viewName === "library") renderLibrary();
   if (viewName === "practice") renderPractice();
   if (viewName === "dashboard") renderDashboard();
+  if (viewName === "report") renderReports();
 }
 
 function readReviewedQuestion(index) {
@@ -604,6 +626,113 @@ async function splitPageWithAi() {
   }
 }
 
+async function generateExamReport() {
+  const context = requireCloudContext();
+  if (!context) return;
+
+  if (!extractedQuestions.length) {
+    setStatus("請先按 AI辨識，確認錯題後再產生考卷報告。");
+    return;
+  }
+
+  const sourceQuestions = extractedQuestions
+    .map((_, index) => readReviewedQuestion(index))
+    .filter((question) => question.question?.trim());
+
+  if (!sourceQuestions.length) {
+    setStatus("沒有可分析的題目文字。");
+    return;
+  }
+
+  setStatus("AI 正在產生考卷報告。");
+  els.generateReportButton.disabled = true;
+
+  try {
+    const response = await fetch(context.endpoint, {
+      method: "POST",
+      redirect: "follow",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+      body: JSON.stringify({
+        action: "analyzeExamReport",
+        studentName: context.studentName,
+        subject: els.subjectInput.value,
+        questions: sourceQuestions,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI endpoint returned ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (!result.ok) {
+      throw new Error(result.error || "考卷報告產生失敗");
+    }
+
+    const report = normalizeExamReport(result.data, sourceQuestions, context.studentName);
+    reports = [report, ...reports.filter((entry) => entry.id !== report.id)].slice(0, 20);
+    currentReportId = report.id;
+    saveReports();
+    renderReports();
+    switchView("report");
+    setStatus("考卷報告已產生。");
+  } catch (error) {
+    setStatus(`考卷報告產生失敗：${error.message}`);
+  } finally {
+    els.generateReportButton.disabled = false;
+  }
+}
+
+function normalizeExamReport(rawReport, sourceQuestions, studentName) {
+  const raw = rawReport || {};
+  const createdAt = raw.createdAt || new Date().toISOString();
+  return {
+    id: raw.id || makeId(),
+    studentName,
+    subject: raw.subject || els.subjectInput.value || sourceQuestions[0]?.subject || "",
+    createdAt,
+    summary: String(raw.summary || "已根據本次錯題整理出考點、錯因與補強練習。"),
+    diagnosisRows: normalizeArray(raw.diagnosisRows).map((row, index) => ({
+      questionNumber: String(row.questionNumber || sourceQuestions[index]?.questionNumber || index + 1),
+      studentAnswer: String(row.studentAnswer || ""),
+      correctAnswer: String(row.correctAnswer || sourceQuestions[index]?.answer || ""),
+      concept: String(row.concept || sourceQuestions[index]?.topic || "未分類"),
+      mistakeReason: String(row.mistakeReason || row.reason || ""),
+      guidance: String(row.guidance || ""),
+    })),
+    focusAreas: normalizeArray(raw.focusAreas).map((area) => ({
+      title: String(area.title || "補強重點"),
+      detail: String(area.detail || ""),
+      tags: normalizeStringArray(area.tags),
+    })),
+    reviewSteps: normalizeArray(raw.reviewSteps).map((step) => ({
+      title: String(step.title || "解題步驟"),
+      detail: String(step.detail || ""),
+    })),
+    cheatSheet: normalizeArray(raw.cheatSheet).map((note) => ({
+      title: String(note.title || "重點"),
+      detail: String(note.detail || ""),
+    })),
+    practiceQuestions: normalizeArray(raw.practiceQuestions).map((question, index) => ({
+      question: String(question.question || `類題 ${index + 1}`),
+      choices: normalizeStringArray(question.choices),
+      answer: String(question.answer || ""),
+      explanation: String(question.explanation || ""),
+      linkedConcept: String(question.linkedConcept || ""),
+    })),
+  };
+}
+
+function normalizeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeStringArray(value) {
+  return Array.isArray(value) ? value.map((entry) => String(entry || "")).filter(Boolean) : [];
+}
+
 function renderImagePreview(dataUrl) {
   els.imagePreview.innerHTML = "";
   const img = document.createElement("img");
@@ -772,6 +901,143 @@ function renderDashboard() {
   }
 }
 
+function renderReports() {
+  els.reportCount.textContent = `${reports.length} 份`;
+  els.reportList.innerHTML = "";
+
+  if (!reports.length) {
+    els.reportList.innerHTML = `<div class="empty-state compact">還沒有考卷報告</div>`;
+    els.reportDetails.innerHTML = `<div class="empty-state">AI辨識錯題後，可從拍照頁產生考卷報告。</div>`;
+    return;
+  }
+
+  if (!reports.some((report) => report.id === currentReportId)) {
+    currentReportId = reports[0].id;
+  }
+
+  reports.forEach((report) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `report-list-button ${report.id === currentReportId ? "active" : ""}`;
+    button.innerHTML = `
+      <strong>${escapeHtml(report.subject || "未分類考卷")}</strong>
+      <span>${escapeHtml(report.studentName || "未設定使用者")} · ${escapeHtml(formatDate(report.createdAt))}</span>
+    `;
+    button.addEventListener("click", () => {
+      currentReportId = report.id;
+      renderReports();
+    });
+    els.reportList.append(button);
+  });
+
+  const report = reports.find((entry) => entry.id === currentReportId) || reports[0];
+  els.reportDetails.innerHTML = `
+    <div class="report-header">
+      <div>
+        <span class="panel-label">${escapeHtml(report.studentName || "未設定使用者")}</span>
+        <h2>${escapeHtml(report.subject || "考卷")}錯題分析報告</h2>
+      </div>
+      <span>${escapeHtml(new Intl.DateTimeFormat("zh-Hant").format(new Date(report.createdAt)))}</span>
+    </div>
+    <p class="report-summary">${escapeHtml(report.summary)}</p>
+    ${renderDiagnosisTable(report.diagnosisRows)}
+    ${renderReportCards("補強重點", report.focusAreas, "tags")}
+    ${renderReportCards("固定解題流程", report.reviewSteps)}
+    ${renderReportCards("考前小抄", report.cheatSheet)}
+    ${renderPracticeQuestions(report.practiceQuestions)}
+  `;
+}
+
+function renderDiagnosisTable(rows) {
+  if (!rows.length) return "";
+  return `
+    <section class="report-section">
+      <h3>錯題診斷表</h3>
+      <div class="table-wrap">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>題號</th>
+              <th>答案</th>
+              <th>考點</th>
+              <th>卡住原因</th>
+              <th>引導語</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map(
+                (row) => `
+                  <tr>
+                    <td>${escapeHtml(row.questionNumber)}</td>
+                    <td>${escapeHtml([row.studentAnswer, row.correctAnswer].filter(Boolean).join(" → ") || "待確認")}</td>
+                    <td>${escapeHtml(row.concept)}</td>
+                    <td>${escapeHtml(row.mistakeReason)}</td>
+                    <td>${escapeHtml(row.guidance)}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function renderReportCards(title, entries, tagKey = "") {
+  if (!entries.length) return "";
+  return `
+    <section class="report-section">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="report-card-grid">
+        ${entries
+          .map(
+            (entry) => `
+              <article class="report-card">
+                <strong>${escapeHtml(entry.title)}</strong>
+                <p>${escapeHtml(entry.detail)}</p>
+                ${
+                  tagKey && entry[tagKey]?.length
+                    ? `<div class="tag-row">${entry[tagKey].map((tag) => `<span class="pill">${escapeHtml(tag)}</span>`).join("")}</div>`
+                    : ""
+                }
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderPracticeQuestions(questions) {
+  if (!questions.length) return "";
+  return `
+    <section class="report-section">
+      <h3>類題加強練習</h3>
+      <div class="report-practice-grid">
+        ${questions
+          .map(
+            (question, index) => `
+              <article class="report-card">
+                <strong>${index + 1}. ${escapeHtml(question.question)}</strong>
+                ${question.choices.length ? `<p>${question.choices.map(escapeHtml).join("　")}</p>` : ""}
+                <details>
+                  <summary>看答案與解析</summary>
+                  <p>${escapeHtml(question.answer ? `答案：${question.answer}` : "答案：待確認")}</p>
+                  <p>${escapeHtml(question.explanation)}</p>
+                  ${question.linkedConcept ? `<p>${escapeHtml(`對應概念：${question.linkedConcept}`)}</p>` : ""}
+                </details>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderCounters() {
   els.dueCount.textContent = items.filter(isDue).length;
 }
@@ -780,6 +1046,7 @@ function renderAll() {
   renderCounters();
   renderLibrary();
   renderDashboard();
+  renderReports();
 }
 
 function escapeHtml(value) {
@@ -858,6 +1125,7 @@ els.form.addEventListener("submit", (event) => {
   event.preventDefault();
 });
 els.aiSplitButton.addEventListener("click", splitPageWithAi);
+els.generateReportButton.addEventListener("click", generateExamReport);
 els.saveRecognizedButton.addEventListener("click", saveRecognizedQuestions);
 els.saveEndpointButton.addEventListener("click", () => {
   const endpoint = normalizeAppsScriptEndpoint(els.aiEndpointInput.value.trim());
@@ -887,3 +1155,4 @@ els.seedButton.addEventListener("click", seedExamples);
 renderAll();
 renderSplitResults();
 renderPractice();
+renderReports();

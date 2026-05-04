@@ -28,6 +28,7 @@
           <button class="nav-tab" data-view="library">錯題庫</button>
           <button class="nav-tab" data-view="practice">重複練習</button>
           <button class="nav-tab" data-view="dashboard">學習狀態</button>
+          <button class="nav-tab" data-view="report">考卷報告</button>
         </nav>
 
         <section class="mini-panel">
@@ -92,6 +93,7 @@
 
               <div class="form-actions">
                 <button class="secondary-button" id="aiSplitButton" type="button">AI辨識</button>
+                <button class="secondary-button" id="generateReportButton" type="button">產生報告</button>
                 <button class="primary-button" id="saveRecognizedButton" type="button">全部儲存</button>
               </div>
               <details class="config-panel">
@@ -184,6 +186,19 @@
           <div class="chart-panel">
             <h2>科目分布</h2>
             <div id="subjectBars" class="subject-bars"></div>
+          </div>
+        </section>
+
+        <section class="view" id="reportView" aria-labelledby="reportTitle">
+          <div class="report-layout">
+            <aside class="report-list-panel">
+              <div class="split-heading">
+                <strong>考卷報告</strong>
+                <span id="reportCount">0 份</span>
+              </div>
+              <div class="report-list" id="reportList"></div>
+            </aside>
+            <article class="report-panel" id="reportDetails"></article>
           </div>
         </section>
       </main>

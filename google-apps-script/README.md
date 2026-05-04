@@ -34,9 +34,12 @@ GitHub Pages 不能安全保存 Gemini API key，所以 AI 整理要放在後端
 - confidence
 - needsHumanReview
 
+切題後也可把多題錯題 JSON 送到 Apps Script，產生考卷級錯題分析報告，包含錯題診斷表、補強重點、解題流程、考前小抄與類題練習。
+
 ## 支援動作
 
 - `refineMistake`：整理單一題
 - `analyzePage`：分析整頁照片，回傳多題切分結果
+- `analyzeExamReport`：依多題錯題產生考卷級分析報告
 - `saveMistake`：依使用者名稱把錯題 JSON 存到 Google Sheets
 - `listMistakes`：依使用者名稱讀取雲端錯題
